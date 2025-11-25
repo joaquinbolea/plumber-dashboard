@@ -14,8 +14,11 @@ function last(arr) {
 function setCards(data) {
   const s = data.series;
 
+  // Tomamos la serie que exista: EFFR o FEDFUNDS
+  const effrSeries = s.EFFR || s.FEDFUNDS;
+
   const sofrLast   = last(s.SOFR.values).toFixed(2);
-  const effrLast   = last(s.EFFR.values).toFixed(2);
+  const effrLast   = last(effrSeries.values).toFixed(2);
   const iorbLast   = last(s.IORB.values).toFixed(2);
   const spreadLast = last(s.SOFR_minus_IORB.values).toFixed(2);
 
@@ -28,6 +31,7 @@ function setCards(data) {
   document.getElementById("card-spread").innerHTML =
     `<h3>SOFR - IORB</h3><p>${spreadLast} pp</p>`;
 }
+
 function plotFunding(data) {
   const s = data.series;
 
