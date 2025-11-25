@@ -1,3 +1,4 @@
+// Carga del JSON con las series
 async function loadData() {
   const res = await fetch("data/plumbing_data.json");
   if (!res.ok) {
@@ -7,18 +8,18 @@ async function loadData() {
   return await res.json();
 }
 
+// Helper para tomar el último valor de un array
 function last(arr) {
   return arr[arr.length - 1];
 }
 
+// Tarjetas de SOFR / EFFR / IORB / Spread
 function setCards(data) {
   const s = data.series;
 
-  // Tomamos la serie que exista: EFFR o FEDFUNDS
-  const effrSeries = s.EFFR || s.FEDFUNDS;
-
+  // En el JSON la serie de fed funds se llama FEDFUNDS
   const sofrLast   = last(s.SOFR.values).toFixed(2);
-  const effrLast   = last(effrSeries.values).toFixed(2);
+  const effrLast   = last(s.FEDFUNDS.values).toFixed(2);
   const iorbLast   = last(s.IORB.values).toFixed(2);
   const spreadLast = last(s.SOFR_minus_IORB.values).toFixed(2);
 
@@ -32,6 +33,7 @@ function setCards(data) {
     `<h3>SOFR - IORB</h3><p>${spreadLast} pp</p>`;
 }
 
+// Gráfico SOFR vs EFFR(FEDFUNDS) vs IORB con botones tipo TradingView
 function plotFunding(data) {
   const s = data.series;
 
@@ -42,8 +44,8 @@ function plotFunding(data) {
     mode: "lines"
   };
   const traceEFFR = {
-    x: s.EFFR.dates,
-    y: s.EFFR.values,
+    x: s.FEDFUNDS.dates,
+    y: s.FEDFUNDS.values,
     name: "EFFR",
     mode: "lines"
   };
@@ -79,7 +81,7 @@ function plotFunding(data) {
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
 }
 
-
+// Gráfico del balance de la Fed con botones de rango y range slider
 function plotBalance(data) {
   const s = data.series.WALCL;
   const trace = {
@@ -114,5 +116,7 @@ function plotBalance(data) {
   Plotly.newPlot("chart-balance", [trace], layout);
 }
 
+// Inicialización del dashboard
+async function init() {
+  const data
 
-init();
