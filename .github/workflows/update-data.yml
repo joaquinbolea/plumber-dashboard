@@ -2,8 +2,8 @@ name: Update plumbing data
 
 on:
   schedule:
-    - cron: "0 * * * *"   # corre cada hora en punto
-  workflow_dispatch:       # para correrlo manualmente
+    - cron: "0 * * * *"   # corre cada hora
+  workflow_dispatch:
 
 jobs:
   update-data:
@@ -23,25 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests pandas
 
-      - name: Run fetch_data.py
+      - name: Run fetch_data.py (rates, WALCL, etc.)
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           python scripts/fetch_data.py
 
-      - name: Commit and push updated data
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Update plumbing data"
-          file_pattern: data/plumbing_data.json
-
-                - name: Run fetch_data.py
-        env:
-          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-        run: |
-          python scripts/fetch_data.py
-
-      - name: Run fetch_tga.py
+      - name: Run fetch_tga.py (TGA Treasury General Account)
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
@@ -50,6 +38,7 @@ jobs:
       - name: Commit and push updated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update plumbing data"
+          commit_message: "Update plumbing + TGA data"
           file_pattern: data/*.json
+
 
