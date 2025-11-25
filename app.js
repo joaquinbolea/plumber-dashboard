@@ -28,7 +28,6 @@ function setCards(data) {
   document.getElementById("card-spread").innerHTML =
     `<h3>SOFR - IORB</h3><p>${spreadLast} pp</p>`;
 }
-
 function plotFunding(data) {
   const s = data.series;
 
@@ -54,11 +53,28 @@ function plotFunding(data) {
   const layout = {
     margin: { t: 30 },
     legend: { orientation: "h" },
-    yaxis: { title: "Tasa (%)" }
+    yaxis: { title: "Tasa (%)" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
+          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
+          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
+          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
+          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
+          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
+          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
+          {step: "all", label: "Todos"}
+        ]
+      },
+      rangeslider: { visible: true }
+    }
   };
 
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
 }
+
 
 function plotBalance(data) {
   const s = data.series.WALCL;
@@ -69,23 +85,30 @@ function plotBalance(data) {
     mode: "lines",
     fill: "tozeroy"
   };
+
   const layout = {
     margin: { t: 30 },
-    yaxis: { title: "Balance Fed (USD bn)" }
+    yaxis: { title: "Balance Fed (USD bn)" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
+          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
+          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
+          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
+          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
+          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
+          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
+          {step: "all", label: "Todos"}
+        ]
+      },
+      rangeslider: { visible: true }
+    }
   };
+
   Plotly.newPlot("chart-balance", [trace], layout);
 }
 
-async function init() {
-  const data = await loadData();
-  if (!data) return;
-
-  document.getElementById("last-updated").textContent =
-    "Última actualización (UTC): " + data.last_updated_utc;
-
-  setCards(data);
-  plotFunding(data);
-  plotBalance(data);
-}
 
 init();
