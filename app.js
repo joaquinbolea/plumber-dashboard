@@ -1,6 +1,5 @@
-// --------- Utilidades básicas ---------
+// --------- Carga de datos principales (plumbing_data.json) ---------
 
-// Cargar JSON con las series
 async function loadData() {
   const res = await fetch("data/plumbing_data.json");
   if (!res.ok) {
@@ -8,16 +7,30 @@ async function loadData() {
     return null;
   }
   const data = await res.json();
-  console.log("Series disponibles:", Object.keys(data.series));
+  console.log("Series main:", Object.keys(data.series));
   return data;
 }
 
-// Último valor de un array
+// --------- Carga de datos de TGA (tga.json) ---------
+
+async function loadTgaData() {
+  const res = await fetch("data/tga.json");
+  if (!res.ok) {
+    console.error("No se pudo cargar tga.json", res.status);
+    return null;
+  }
+  const data = await res.json();
+  console.log("Series TGA:", Object.keys(data.series));
+  return data;
+}
+
+// --------- Helpers ---------
+
 function last(arr) {
   return arr[arr.length - 1];
 }
 
-// Buscar la primera serie que exista entre varios nombres posibles
+// Busca la primera serie existente entre los nombres dados
 function getSeries(seriesObj, preferredNames) {
   for (const name of preferredNames) {
     if (seriesObj[name]) {
@@ -28,7 +41,7 @@ function getSeries(seriesObj, preferredNames) {
   return null;
 }
 
-// --------- Tarjetas superiores ---------
+// --------- Tarjetas superiores (SOFR / EFFR / IORB / Spread) ---------
 
 function setCards(data) {
   const s = data.series;
@@ -99,14 +112,14 @@ function plotFunding(data) {
       type: "date",
       rangeselector: {
         buttons: [
-          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
-          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
-          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
-          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
-          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
-          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
-          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
-          {step: "all", label: "Todos"}
+          { count: 5,  label: "5D",  step: "day",   stepmode: "backward" },
+          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
+          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
+          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
+          { count: 1,  label: "YTD", step: "year",  stepmode: "todate"   },
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
@@ -116,7 +129,45 @@ function plotFunding(data) {
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
 }
 
-// --------- Gráfico del balance de la Fed ---------
+// --------- Gráfico TGA (tga.json separado) ---------
+
+function plotTGA(tgaData) {
+  if (!tgaData || !tgaData.series || !tgaData.series.TGA) {
+    console.error("No hay datos de TGA para graficar");
+    return;
+  }
+
+  const tga = tgaData.series.TGA;
+
+  const trace = {
+    x: tga.dates,
+    y: tga.values.map(v => v / 1000), // millones -> miles de millones
+    name: "TGA",
+    mode: "lines",
+    fill: "tozeroy"
+  };
+
+  const layout = {
+    margin: { t: 30 },
+    yaxis: { title: "TGA (USD bn)" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 3,  label: "3A",  step: "year",  stepmode: "backward" },
+          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
+        ]
+      },
+      rangeslider: { visible: true }
+    }
+  };
+
+  Plotly.newPlot("chart-tga", [trace], layout);
+}
+
+// --------- Gráfico Balance Fed (WALCL) ---------
 
 function plotBalance(data) {
   const s = data.series;
@@ -128,7 +179,7 @@ function plotBalance(data) {
 
   const trace = {
     x: walcl.dates,
-    y: walcl.values.map(v => v / 1e3), // miles de millones
+    y: walcl.values.map(v => v / 1000), // millones -> miles de millones
     name: "WALCL",
     mode: "lines",
     fill: "tozeroy"
@@ -141,14 +192,10 @@ function plotBalance(data) {
       type: "date",
       rangeselector: {
         buttons: [
-          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
-          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
-          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
-          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
-          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
-          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
-          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
-          {step: "all", label: "Todos"}
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 3,  label: "3A",  step: "year",  stepmode: "backward" },
+          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
@@ -162,20 +209,30 @@ function plotBalance(data) {
 
 async function init() {
   try {
-    const data = await loadData();
-    if (!data) return;
+    // Cargamos en paralelo: datos principales + TGA aparte
+    const [mainData, tgaData] = await Promise.all([
+      loadData(),
+      loadTgaData()
+    ]);
 
-    document.getElementById("last-updated").textContent =
-      "Última actualización (UTC): " + data.last_updated_utc;
+    if (!mainData) return;
 
-    setCards(data);
-    plotFunding(data);
-    plotBalance(data);
+    const lastUpdatedEl = document.getElementById("last-updated");
+    if (lastUpdatedEl) {
+      lastUpdatedEl.textContent =
+        "Última actualización (UTC): " + mainData.last_updated_utc;
+    }
+
+    setCards(mainData);
+    plotFunding(mainData);
+    if (tgaData) {
+      plotTGA(tgaData);
+    }
+    plotBalance(mainData);
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
   }
 }
 
 init();
-
 
