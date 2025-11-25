@@ -1,4 +1,4 @@
-// Carga del JSON con las series
+// Cargar JSON con las series
 async function loadData() {
   const res = await fetch("data/plumbing_data.json");
   if (!res.ok) {
@@ -8,7 +8,7 @@ async function loadData() {
   return await res.json();
 }
 
-// Helper para tomar el último valor de un array
+// Helper para tomar el último valor
 function last(arr) {
   return arr[arr.length - 1];
 }
@@ -17,9 +17,8 @@ function last(arr) {
 function setCards(data) {
   const s = data.series;
 
-  // En el JSON la serie de fed funds se llama FEDFUNDS
   const sofrLast   = last(s.SOFR.values).toFixed(2);
-  const effrLast   = last(s.FEDFUNDS.values).toFixed(2);
+  const effrLast   = last(s.EFFR.values).toFixed(2);        // <- nombre exacto de la serie
   const iorbLast   = last(s.IORB.values).toFixed(2);
   const spreadLast = last(s.SOFR_minus_IORB.values).toFixed(2);
 
@@ -33,7 +32,7 @@ function setCards(data) {
     `<h3>SOFR - IORB</h3><p>${spreadLast} pp</p>`;
 }
 
-// Gráfico SOFR vs EFFR(FEDFUNDS) vs IORB con botones tipo TradingView
+// Gráfico SOFR vs EFFR vs IORB con botones tipo TradingView
 function plotFunding(data) {
   const s = data.series;
 
@@ -44,8 +43,8 @@ function plotFunding(data) {
     mode: "lines"
   };
   const traceEFFR = {
-    x: s.FEDFUNDS.dates,
-    y: s.FEDFUNDS.values,
+    x: s.EFFR.dates,
+    y: s.EFFR.values,
     name: "EFFR",
     mode: "lines"
   };
@@ -64,14 +63,14 @@ function plotFunding(data) {
       type: "date",
       rangeselector: {
         buttons: [
-          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
-          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
-          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
-          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
-          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
-          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
-          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
-          {step: "all", label: "Todos"}
+          { count: 5,  label: "5D",  step: "day",   stepmode: "backward" },
+          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
+          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
+          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
+          { count: 1,  label: "YTD", step: "year",  stepmode: "todate"   },
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
@@ -81,9 +80,10 @@ function plotFunding(data) {
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
 }
 
-// Gráfico del balance de la Fed con botones de rango y range slider
+// Gráfico del balance de la Fed con botones de rango
 function plotBalance(data) {
   const s = data.series.WALCL;
+
   const trace = {
     x: s.dates,
     y: s.values.map(v => v / 1e3), // miles de millones
@@ -99,14 +99,14 @@ function plotBalance(data) {
       type: "date",
       rangeselector: {
         buttons: [
-          {count: 5,  label: "5D",  step: "day",   stepmode: "backward"},
-          {count: 1,  label: "1M",  step: "month", stepmode: "backward"},
-          {count: 3,  label: "3M",  step: "month", stepmode: "backward"},
-          {count: 6,  label: "6M",  step: "month", stepmode: "backward"},
-          {count: 1,  label: "YTD", step: "year",  stepmode: "todate"},
-          {count: 1,  label: "1A",  step: "year",  stepmode: "backward"},
-          {count: 5,  label: "5A",  step: "year",  stepmode: "backward"},
-          {step: "all", label: "Todos"}
+          { count: 5,  label: "5D",  step: "day",   stepmode: "backward" },
+          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
+          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
+          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
+          { count: 1,  label: "YTD", step: "year",  stepmode: "todate"   },
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
@@ -116,7 +116,18 @@ function plotBalance(data) {
   Plotly.newPlot("chart-balance", [trace], layout);
 }
 
-// Inicialización del dashboard
+// Inicializar dashboard
 async function init() {
-  const data
+  const data = await loadData();
+  if (!data) return;
+
+  document.getElementById("last-updated").textContent =
+    "Última actualización (UTC): " + data.last_updated_utc;
+
+  setCards(data);
+  plotFunding(data);
+  plotBalance(data);
+}
+
+init();
 
