@@ -1,0 +1,36 @@
+name: Update plumbing data
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # corre cada hora en punto
+  workflow_dispatch:       # para correrlo manualmente
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pandas
+
+      - name: Run fetch_data.py
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          python scripts/fetch_data.py
+
+      - name: Commit and push updated data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update plumbing data"
+          file_pattern: data/plumbing_data.json
