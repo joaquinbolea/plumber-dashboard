@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Plumber Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Plumber Dashboard – Liquidez & Funding USD</h1>
+    <p id="last-updated"></p>
+  </header>
+
+  <main>
+    <section class="cards">
+      <div class="card" id="card-sofr">SOFR</div>
+      <div class="card" id="card-effr">EFFR</div>
+      <div class="card" id="card-iorb">IORB</div>
+      <div class="card" id="card-spread">SOFR – IORB</div>
+    </section>
+
+    <section>
+      <h2>SOFR vs EFFR vs IORB</h2>
+      <div id="chart-funding" class="chart"></div>
+    </section>
+
+    <section>
+      <h2>Balance de la Fed (WALCL)</h2>
+      <div id="chart-balance" class="chart"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
