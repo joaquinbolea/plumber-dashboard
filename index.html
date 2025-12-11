@@ -2,35 +2,104 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Plumber Dashboard</title>
+  <title>Plumber Dashboard – Liquidez &amp; Funding USD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <!-- Estilos -->
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Plumber Dashboard – Liquidez & Funding USD</h1>
-    <p id="last-updated"></p>
+  <header class="header">
+    <div class="header-left">
+      <h1>Plumber Dashboard – Liquidez &amp; Funding USD</h1>
+      <div id="last-updated" class="last-updated">
+        Última actualización (UTC): -
+      </div>
+    </div>
   </header>
 
-  <main>
+  <main class="main">
+    <!-- Tarjetas superiores -->
     <section class="cards">
-      <div class="card" id="card-sofr">SOFR</div>
-      <div class="card" id="card-effr">EFFR</div>
-      <div class="card" id="card-iorb">IORB</div>
-      <div class="card" id="card-spread">SOFR – IORB</div>
+      <div class="card">
+        <div class="card-label">SOFR</div>
+        <div id="card-sofr" class="card-value">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">EFFR</div>
+        <div id="card-effr" class="card-value">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">IORB</div>
+        <div id="card-iorb" class="card-value">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">SOFR - IORB</div>
+        <div id="card-spread" class="card-value">-</div>
+      </div>
     </section>
-    
-<h2>SOFR vs EFFR vs IORB</h2>
-<div id="chart-funding" class="chart"></div>
 
-<h2>Cuenta del Tesoro en la Fed (TGA)</h2>
-<div id="chart-tga" class="chart"></div>   <!-- NUEVO -->
+    <!-- Navegación de gráficos -->
+    <section class="charts-section">
+      <div class="chart-nav">
+        <button id="btn-funding" class="chart-tab active"
+                onclick="setActiveChart('funding')">
+          SOFR vs EFFR vs IORB
+        </button>
+        <button id="btn-spread" class="chart-tab"
+                onclick="setActiveChart('spread')">
+          Spread SOFR - IORB
+        </button>
+        <button id="btn-tga" class="chart-tab"
+                onclick="setActiveChart('tga')">
+          Cuenta del Tesoro (TGA)
+        </button>
+        <button id="btn-balance" class="chart-tab"
+                onclick="setActiveChart('balance')">
+          Balance de la Fed (WALCL)
+        </button>
+        <button id="btn-repo" class="chart-tab"
+                onclick="setActiveChart('repo')">
+          Mercado de Repo &amp; RRP
+        </button>
+      </div>
 
-<h2>Balance de la Fed (WALCL)</h2>
-<div id="chart-balance" class="chart"></div>
-<h2>Mercado de Repo y RRP (TGCR, SOFR, ON RRP)</h2>
-<div id="chart-repo" class="chart"></div>
+      <!-- Panel: Funding -->
+      <div id="panel-funding" class="chart-panel active">
+        <h2>SOFR vs EFFR vs IORB</h2>
+        <div id="chart-funding" class="chart"></div>
+      </div>
 
+      <!-- Panel: Spread -->
+      <div id="panel-spread" class="chart-panel">
+        <h2>Spread SOFR - IORB</h2>
+        <div id="chart-spread" class="chart"></div>
+      </div>
+
+      <!-- Panel: TGA -->
+      <div id="panel-tga" class="chart-panel">
+        <h2>Cuenta del Tesoro en la Fed (TGA)</h2>
+        <div id="chart-tga" class="chart"></div>
+      </div>
+
+      <!-- Panel: Balance Fed -->
+      <div id="panel-balance" class="chart-panel">
+        <h2>Balance de la Fed (WALCL)</h2>
+        <div id="chart-balance" class="chart"></div>
+      </div>
+
+      <!-- Panel: Repo & RRP -->
+      <div id="panel-repo" class="chart-panel">
+        <h2>Mercado de Repo y RRP (TGCR, SOFR, ON RRP)</h2>
+        <div id="chart-repo" class="chart"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Lógica -->
   <script src="app.js"></script>
 </body>
 </html>
