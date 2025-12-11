@@ -84,7 +84,7 @@ body {
 
 .chart {
   width: 100%;
-  height: 420px;
+  height: 70vh;              /* OCUPA CASI TODA LA PANTALLA */
   background-color: #ffffff;
   border-radius: 0.6rem;
   border: 1px solid #d0d7de;
@@ -138,10 +138,6 @@ body {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .chart {
-    height: 360px;
-  }
 }
 
 @media (max-width: 600px) {
@@ -153,3 +149,4 @@ body {
     font-size: 0.95rem;
   }
 }
+
