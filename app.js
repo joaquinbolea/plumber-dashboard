@@ -181,6 +181,105 @@ function plotTGA(tgaData) {
 
   Plotly.newPlot("chart-tga", [trace], layout);
 }
+//-------------------------------------------------
+// --------- Panel de Repo & RRP ---------
+
+function plotRepo(mainData, repoData) {
+  if (!repoData || !repoData.series) {
+    console.error("repoData vacío");
+    return;
+  }
+
+  const sRepo = repoData.series;
+  const sMain = mainData.series || {};
+
+  const tgcr = sRepo.TGCRRATE;
+  const rrpVol = sRepo.RRPONTSYD;
+  const rrpRate = sRepo.RRPONTSYAWARD;
+  const sofr = getSeries(sMain, ["SOFR"]);
+
+  if (!tgcr || !rrpVol || !rrpRate) {
+    console.error("Faltan series de repo en repo.json");
+    const container = document.getElementById("chart-repo");
+    if (container) {
+      container.innerHTML =
+        "<p style='color:#b42318'>Faltan series de repo en repo.json</p>";
+    }
+    return;
+  }
+
+  // Trazas de tasas (TGCR, SOFR, RRP award)
+  const traceTGCR = {
+    x: tgcr.dates,
+    y: tgcr.values,
+    name: "TGCR (repo GC)",
+    mode: "lines",
+    yaxis: "y1"
+  };
+
+  const traceRRPRate = {
+    x: rrpRate.dates,
+    y: rrpRate.values,
+    name: "ON RRP rate",
+    mode: "lines",
+    yaxis: "y1"
+  };
+
+  const traces = [traceTGCR, traceRRPRate];
+
+  if (sofr) {
+    traces.push({
+      x: sofr.dates,
+      y: sofr.values,
+      name: "SOFR",
+      mode: "lines",
+      yaxis: "y1"
+    });
+  }
+
+  // Volumen del ON RRP (barras, eje derecho)
+  const traceRRPVol = {
+    x: rrpVol.dates,
+    y: rrpVol.values, // ya viene en miles de millones desde FRED
+    name: "ON RRP volumen (USD bn)",
+    type: "bar",
+    opacity: 0.3,
+    yaxis: "y2"
+  };
+
+  traces.push(traceRRPVol);
+
+  const layout = {
+    barmode: "overlay",
+    margin: { t: 30 },
+    legend: { orientation: "h" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
+          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
+          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
+          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { step: "all", label: "Todos" }
+        ]
+      },
+      rangeslider: { visible: true }
+    },
+    yaxis: {
+      title: "Tasa (%)",
+      side: "left"
+    },
+    yaxis2: {
+      title: "ON RRP volumen (USD bn)",
+      overlaying: "y",
+      side: "right",
+      showgrid: false
+    }
+  };
+
+  Plotly.newPlot("chart-repo", traces, layout);
+}
 
 // --------- Gráfico Balance Fed (WALCL) ---------
 
