@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- ApexCharts -->
-  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.1"></script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -16,7 +16,7 @@
     <div class="last-update" id="last-update">Última actualización: …</div>
   </header>
 
-  <!-- Metric cards -->
+  <!-- Cards -->
   <section class="cards-row">
     <div class="metric-card">
       <div class="metric-label">SOFR</div>
@@ -55,7 +55,7 @@
     </button>
   </nav>
 
-  <!-- Panels -->
+  <!-- PANELS -->
 
   <!-- 1) SOFR / EFFR / IORB -->
   <section id="panel-sofr" class="panel active">
@@ -69,8 +69,7 @@
       </div>
     </header>
     <div class="chart-wrapper">
-      <div id="chart-sofr-main" class="chart-main"></div>
-      <div id="chart-sofr-brush" class="chart-brush"></div>
+      <div id="chart-sofr" class="chart-main"></div>
     </div>
   </section>
 
@@ -86,8 +85,7 @@
       </div>
     </header>
     <div class="chart-wrapper">
-      <div id="chart-spread-main" class="chart-main"></div>
-      <div id="chart-spread-brush" class="chart-brush"></div>
+      <div id="chart-spread" class="chart-main"></div>
     </div>
   </section>
 
@@ -103,8 +101,7 @@
       </div>
     </header>
     <div class="chart-wrapper">
-      <div id="chart-tga-main" class="chart-main"></div>
-      <div id="chart-tga-brush" class="chart-brush"></div>
+      <div id="chart-tga" class="chart-main"></div>
     </div>
   </section>
 
@@ -119,8 +116,7 @@
       </div>
     </header>
     <div class="chart-wrapper">
-      <div id="chart-walcl-main" class="chart-main"></div>
-      <div id="chart-walcl-brush" class="chart-brush"></div>
+      <div id="chart-walcl" class="chart-main"></div>
     </div>
   </section>
 
@@ -136,8 +132,7 @@
       </div>
     </header>
     <div class="chart-wrapper">
-      <div id="chart-repo-main" class="chart-main"></div>
-      <div id="chart-repo-brush" class="chart-brush"></div>
+      <div id="chart-repo" class="chart-main"></div>
     </div>
   </section>
 
