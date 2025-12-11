@@ -1,540 +1,665 @@
-// ==============================
-//  Helpers de carga de datos
-// ==============================
+// app.js
 
-async function loadData() {
+let plumbingRows = [];
+let tgaRows = [];
+let repoRows = []; // lo tomamos desde plumbingRows (TGCR, SOFR, ONRRP), pero dejo separado por si en el futuro hay otro JSON.
+
+let charts = {};
+let activePanel = "panel-sofr";
+const panelRanges = {
+  "panel-sofr": "6M",
+  "panel-spread": "6M",
+  "panel-tga": "6M",
+  "panel-walcl": "3Y",
+  "panel-repo": "6M",
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
   try {
-    const res = await fetch("data/plumbing_data.json");
-    if (!res.ok) {
-      console.error("No se pudo cargar plumbing_data.json:", res.status);
-      return null;
-    }
-    const data = await res.json();
-    return data;
+    const [plumbData, tgaData] = await Promise.all([
+      fetchJson("data/plumbing_data.json"),
+      fetchJson("data/tga_data.json").catch(() => []),
+    ]);
+
+    // Normalizamos
+    plumbingRows = plumbData
+      .map((row) => ({
+        date: new Date(row.date),
+        sofr: toNumber(row.SOFR ?? row.sofr),
+        effr: toNumber(row.EFFR ?? row.effr),
+        iorb: toNumber(row.IORB ?? row.iorb),
+        walcl: toNumber(row.WALCL ?? row.walcl),
+        tgcr: toNumber(row.TGCR ?? row.tgcr),
+        onrrp: toNumber(row.ONRRP ?? row.onrrp),
+      }))
+      .sort((a, b) => a.date - b.date);
+
+    tgaRows = tgaData
+      .map((row) => ({
+        date: new Date(row.date),
+        tga: toNumber(row.TGA ?? row.tga),
+      }))
+      .sort((a, b) => a.date - b.date);
+
+    repoRows = plumbingRows; // por ahora usamos las tasas del mismo JSON
+
+    updateCards();
+    setupTabs();
+    setupRangeButtons();
+
+    buildAllCharts();
+    updateLastUpdateLabel();
   } catch (err) {
-    console.error("Error cargando plumbing_data.json:", err);
-    return null;
+    console.error("Error inicializando dashboard:", err);
   }
+});
+
+/* ---------- Helpers básicos ---------- */
+
+async function fetchJson(path) {
+  const resp = await fetch(path);
+  if (!resp.ok) {
+    throw new Error(`No se pudo leer ${path}`);
+  }
+  return resp.json();
 }
 
-async function loadTgaData() {
-  try {
-    const res = await fetch("data/tga_data.json");
-    if (!res.ok) {
-      console.warn("No se pudo cargar tga_data.json:", res.status);
-      return null;
-    }
-    const data = await res.json();
-    return data;
-  } catch (err) {
-    console.error("Error cargando tga_data.json:", err);
-    return null;
-  }
+function toNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
-async function loadRepoData() {
-  try {
-    const res = await fetch("data/repo.json");
-    if (!res.ok) {
-      console.warn("No se pudo cargar repo.json:", res.status);
-      return null;
-    }
-    const data = await res.json();
-    return data;
-  } catch (err) {
-    console.error("Error cargando repo.json:", err);
-    return null;
-  }
+function formatPercent(x) {
+  if (x == null || !Number.isFinite(x)) return "–";
+  return (x * 100).toFixed(2) + " %";
 }
 
-// Toma la primera serie que encuentre de una lista de claves
-function getSeries(seriesObj, keys) {
-  if (!seriesObj) return null;
-  for (const k of keys) {
-    if (seriesObj[k]) return seriesObj[k];
+function formatSpreadPp(x) {
+  if (x == null || !Number.isFinite(x)) return "–";
+  return x.toFixed(2) + " pp";
+}
+
+function formatBillions(x) {
+  if (x == null || !Number.isFinite(x)) return "–";
+  return (x / 1e3).toFixed(1) + " Bn";
+}
+
+function getLastNonNull(arr, field) {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const v = arr[i][field];
+    if (v != null && Number.isFinite(v)) return arr[i];
   }
   return null;
 }
 
-// Calcula rango de tasas con padding
-function computeRateRange(seriesObj, keys, padding) {
-  const all = [];
-  keys.forEach((k) => {
-    const s = seriesObj[k];
-    if (s && Array.isArray(s.values)) {
-      s.values.forEach((v) => {
-        if (typeof v === "number" && !isNaN(v)) {
-          all.push(v);
-        }
+/* ---------- Cards superiores ---------- */
+
+function updateCards() {
+  if (!plumbingRows.length) return;
+
+  const lastSofr = getLastNonNull(plumbingRows, "sofr");
+  const lastEffr = getLastNonNull(plumbingRows, "effr");
+  const lastIorb = getLastNonNull(plumbingRows, "iorb");
+
+  const sofrValue = lastSofr ? lastSofr.sofr : null;
+  const effrValue = lastEffr ? lastEffr.effr : null;
+  const iorbValue = lastIorb ? lastIorb.iorb : null;
+  const spreadValue =
+    sofrValue != null && iorbValue != null ? (sofrValue - iorbValue) * 100 : null;
+
+  document.getElementById("card-sofr").textContent = formatPercent(sofrValue);
+  document.getElementById("card-effr").textContent = formatPercent(effrValue);
+  document.getElementById("card-iorb").textContent = formatPercent(iorbValue);
+  document.getElementById("card-spread").textContent = formatSpreadPp(spreadValue);
+}
+
+function updateLastUpdateLabel() {
+  let lastDate = null;
+  if (plumbingRows.length) lastDate = plumbingRows[plumbingRows.length - 1].date;
+  if (!lastDate) return;
+
+  const utc = new Date(
+    Date.UTC(
+      lastDate.getUTCFullYear(),
+      lastDate.getUTCMonth(),
+      lastDate.getUTCDate(),
+      lastDate.getUTCHours(),
+      lastDate.getUTCMinutes(),
+      lastDate.getUTCSeconds()
+    )
+  );
+
+  const label =
+    utc.getUTCFullYear() +
+    "-" +
+    String(utc.getUTCMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(utc.getUTCDate()).padStart(2, "0") +
+    " " +
+    String(utc.getUTCHours()).padStart(2, "0") +
+    ":" +
+    String(utc.getUTCMinutes()).padStart(2, "0") +
+    " UTC";
+
+  document.getElementById("last-update").textContent =
+    "Última actualización (UTC): " + label;
+}
+
+/* ---------- Tabs / Paneles ---------- */
+
+function setupTabs() {
+  const buttons = document.querySelectorAll(".tab-button");
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.panel;
+      if (!target || target === activePanel) return;
+
+      document
+        .querySelectorAll(".tab-button")
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+      document.getElementById(target).classList.add("active");
+
+      activePanel = target;
+      // reajustamos tamaño del gráfico al cambiar de panel
+      Object.values(charts).forEach((ch) => ch && ch.resize());
+    });
+  });
+}
+
+/* ---------- Botones de rango ---------- */
+
+function setupRangeButtons() {
+  document.querySelectorAll(".range-buttons").forEach((group) => {
+    const panel = group.dataset.panel;
+    group.querySelectorAll(".range-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const range = btn.dataset.range;
+        if (!range) return;
+        panelRanges[panel] = range;
+
+        group.querySelectorAll(".range-btn").forEach((b) =>
+          b.classList.remove("active")
+        );
+        btn.classList.add("active");
+
+        updateChartForPanel(panel);
       });
-    }
+    });
   });
-
-  if (all.length === 0) return null;
-
-  const min = Math.min(...all);
-  const max = Math.max(...all);
-  return [min - padding, max + padding];
 }
 
-// Líneas de fin de mes / trimestre
-function buildMonthQuarterEndShapes(dateStrings) {
-  if (!dateStrings || dateStrings.length === 0) return [];
+/* ---------- Time range helper ---------- */
 
-  const firstDate = new Date(dateStrings[0]);
-  const lastDate = new Date(dateStrings[dateStrings.length - 1]);
+function filterByRange(rows, range) {
+  if (!rows.length || range === "ALL") return rows;
 
-  const shapes = [];
-  const d = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+  const lastDate = rows[rows.length - 1].date;
+  let fromDate;
 
-  while (d <= lastDate) {
-    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const iso = monthEnd.toISOString().slice(0, 10);
-    const isQuarterEnd = [2, 5, 8, 11].includes(monthEnd.getMonth());
+  switch (range) {
+    case "6M":
+      fromDate = new Date(lastDate);
+      fromDate.setMonth(fromDate.getMonth() - 6);
+      break;
+    case "1Y":
+      fromDate = new Date(lastDate);
+      fromDate.setFullYear(fromDate.getFullYear() - 1);
+      break;
+    case "3Y":
+      fromDate = new Date(lastDate);
+      fromDate.setFullYear(fromDate.getFullYear() - 3);
+      break;
+    case "5Y":
+      fromDate = new Date(lastDate);
+      fromDate.setFullYear(fromDate.getFullYear() - 5);
+      break;
+    default:
+      return rows;
+  }
 
-    shapes.push({
+  return rows.filter((r) => r.date >= fromDate);
+}
+
+/* ---------- Construcción de todos los gráficos ---------- */
+
+function buildAllCharts() {
+  buildSofrChart();
+  buildSpreadChart();
+  buildTgaChart();
+  buildWalclChart();
+  buildRepoChart();
+}
+
+/* ---------- 1) SOFR / EFFR / IORB ---------- */
+
+function buildSofrChart() {
+  const range = panelRanges["panel-sofr"];
+  const data = filterByRange(plumbingRows, range);
+
+  const sofrSeries = data
+    .filter((r) => r.sofr != null)
+    .map((r) => ({ x: r.date, y: r.sofr * 100 }));
+  const effrSeries = data
+    .filter((r) => r.effr != null)
+    .map((r) => ({ x: r.date, y: r.effr * 100 }));
+  const iorbSeries = data
+    .filter((r) => r.iorb != null)
+    .map((r) => ({ x: r.date, y: r.iorb * 100 }));
+
+  const mainOptions = {
+    chart: {
+      id: "sofr-main",
       type: "line",
-      xref: "x",
-      yref: "paper",
-      x0: iso,
-      x1: iso,
-      y0: 0,
-      y1: 1,
-      line: {
-        width: isQuarterEnd ? 2 : 1,
-        color: isQuarterEnd
-          ? "rgba(180, 52, 24, 0.6)"
-          : "rgba(0,0,0,0.15)",
-        dash: isQuarterEnd ? "solid" : "dot",
-      },
-      layer: isQuarterEnd ? "above" : "below",
-    });
-
-    d.setMonth(d.getMonth() + 1);
-  }
-
-  return shapes;
-}
-
-// ==============================
-//  Cards
-// ==============================
-
-function setCards(data) {
-  if (!data || !data.series) return;
-
-  const s = data.series;
-  const sofr = getSeries(s, ["SOFR"]);
-  const effr = getSeries(s, ["EFFR"]);
-  const iorb = getSeries(s, ["IORB"]);
-
-  const last = (serie) => {
-    if (!serie || !serie.values || serie.values.length === 0) return null;
-    return serie.values[serie.values.length - 1];
-  };
-
-  const sofrLast = last(sofr);
-  const effrLast = last(effr);
-  const iorbLast = last(iorb);
-  const spreadLast =
-    sofrLast != null && iorbLast != null ? sofrLast - iorbLast : null;
-
-  const setCardText = (id, val, suffix) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (val == null || isNaN(val)) {
-      el.textContent = "-";
-      return;
-    }
-    el.textContent = val.toFixed(2) + (suffix || "");
-  };
-
-  setCardText("card-sofr", sofrLast, " %");
-  setCardText("card-effr", effrLast, " %");
-  setCardText("card-iorb", iorbLast, " %");
-  setCardText("card-spread", spreadLast, " pp");
-}
-
-// ==============================
-//  Gráfico 1: SOFR vs EFFR vs IORB
-// ==============================
-
-function plotFunding(data) {
-  if (!data || !data.series) return;
-  const s = data.series;
-
-  const sofr = getSeries(s, ["SOFR"]);
-  const effr = getSeries(s, ["EFFR"]);
-  const iorb = getSeries(s, ["IORB"]);
-
-  if (!sofr || !effr || !iorb) {
-    console.error("Faltan series para plotFunding");
-    return;
-  }
-
-  const traceSOFR = {
-    x: sofr.dates,
-    y: sofr.values,
-    name: "SOFR",
-    mode: "lines",
-  };
-
-  const traceEFFR = {
-    x: effr.dates,
-    y: effr.values,
-    name: "EFFR",
-    mode: "lines",
-  };
-
-  const traceIORB = {
-    x: iorb.dates,
-    y: iorb.values,
-    name: "IORB",
-    mode: "lines",
-  };
-
-  const yRange = computeRateRange(s, ["SOFR", "EFFR", "IORB"], 0.15);
-
-  const layout = {
-    margin: { t: 30, r: 40 },
-    legend: { orientation: "h" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1, label: "1M", step: "month", stepmode: "backward" },
-          { count: 3, label: "3M", step: "month", stepmode: "backward" },
-          { count: 6, label: "6M", step: "month", stepmode: "backward" },
-          { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" },
-        ],
-      },
-      rangeslider: { visible: true },
+      height: 420,
+      toolbar: { show: true },
+      zoom: { enabled: true },
     },
+    series: [
+      { name: "SOFR", data: sofrSeries },
+      { name: "EFFR", data: effrSeries },
+      { name: "IORB", data: iorbSeries },
+    ],
+    xaxis: { type: "datetime" },
     yaxis: {
-      title: "Tasa (%)",
-      range: yRange || undefined,
+      title: { text: "Tasa (%)" },
+      labels: { formatter: (v) => v.toFixed(2) },
     },
-    shapes: buildMonthQuarterEndShapes(sofr.dates),
+    stroke: { width: 2 },
+    legend: { position: "top" },
   };
 
-  Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
-}
-
-// ==============================
-//  Gráfico 2: Spread SOFR - IORB
-// ==============================
-
-function plotSpread(data) {
-  if (!data || !data.series) return;
-
-  const s = data.series;
-  const sofr = getSeries(s, ["SOFR"]);
-  const iorb = getSeries(s, ["IORB"]);
-
-  if (!sofr || !iorb) {
-    console.error("Faltan series para plotSpread");
-    return;
-  }
-
-  const dates = [];
-  const spread = [];
-
-  const n = Math.min(sofr.dates.length, iorb.dates.length);
-
-  for (let i = 0; i < n; i++) {
-    const dS = sofr.dates[i];
-    const dI = iorb.dates[i];
-    if (dS === dI) {
-      dates.push(dS);
-      spread.push(sofr.values[i] - iorb.values[i]);
-    }
-  }
-
-  const traceSpread = {
-    x: dates,
-    y: spread,
-    name: "SOFR - IORB",
-    mode: "lines",
-  };
-
-  const layout = {
-    margin: { t: 30, r: 40 },
-    legend: { orientation: "h" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1, label: "1M", step: "month", stepmode: "backward" },
-          { count: 3, label: "3M", step: "month", stepmode: "backward" },
-          { count: 6, label: "6M", step: "month", stepmode: "backward" },
-          { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" },
-        ],
-      },
-      rangeslider: { visible: true },
-    },
-    yaxis: {
-      title: "Spread (pp)",
-    },
-  };
-
-  Plotly.newPlot("chart-spread", [traceSpread], layout);
-}
-
-// ==============================
-//  Gráfico 3: TGA
-// ==============================
-
-function plotTGA(tgaData) {
-  if (!tgaData || !tgaData.series) return;
-
-  const s = tgaData.series;
-  const tga = getSeries(s, ["TGA", "WTREGEN"]);
-
-  if (!tga) {
-    console.error("No se encontró la serie TGA en tga_data.json");
-    return;
-  }
-
-  const traceTGA = {
-    x: tga.dates,
-    y: tga.values,
-    name: "TGA (USD bn)",
-    type: "scatter",
-    fill: "tozeroy",
-  };
-
-  const layout = {
-    margin: { t: 30, r: 40 },
-    legend: { orientation: "h" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1, label: "1M", step: "month", stepmode: "backward" },
-          { count: 3, label: "3M", step: "month", stepmode: "backward" },
-          { count: 6, label: "6M", step: "month", stepmode: "backward" },
-          { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" },
-        ],
-      },
-      rangeslider: { visible: true },
-    },
-    yaxis: { title: "TGA (USD bn)" },
-  };
-
-  Plotly.newPlot("chart-tga", [traceTGA], layout);
-}
-
-// ==============================
-//  Gráfico 4: Balance Fed (WALCL)
-// ==============================
-
-function plotBalance(data) {
-  if (!data || !data.series) return;
-  const s = data.series;
-
-  const walcl = getSeries(s, ["WALCL"]);
-  if (!walcl) {
-    console.error("No se encontró WALCL en plumbing_data.json");
-    return;
-  }
-
-  const traceBal = {
-    x: walcl.dates,
-    y: walcl.values,
-    name: "Balance de la Fed (USD bn)",
-    type: "scatter",
-    fill: "tozeroy",
-  };
-
-  const layout = {
-    margin: { t: 30, r: 40 },
-    legend: { orientation: "h" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1, label: "1M", step: "month", stepmode: "backward" },
-          { count: 3, label: "3M", step: "month", stepmode: "backward" },
-          { count: 6, label: "6M", step: "month", stepmode: "backward" },
-          { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" },
-        ],
-      },
-      rangeslider: { visible: true },
-    },
-    yaxis: { title: "Balance Fed (USD bn)" },
-  };
-
-  Plotly.newPlot("chart-balance", [traceBal], layout);
-}
-
-// ==============================
-//  Gráfico 5: Repo & RRP
-// ==============================
-
-function plotRepo(mainData, repoData) {
-  const container = document.getElementById("chart-repo");
-  if (!container) {
-    console.error("No existe el contenedor chart-repo");
-    return;
-  }
-
-  if (!repoData || !repoData.series) {
-    console.error("repoData vacío o sin series");
-    container.innerHTML =
-      "<p style='color:#b42318'>No se pudo cargar repo.json</p>";
-    return;
-  }
-
-  const sRepo = repoData.series;
-  const sMain = mainData.series || {};
-
-  const tgcr = sRepo.TGCRRATE;
-  const rrpVol = sRepo.RRPONTSYD;
-  const rrpRate = sRepo.RRPONTSYAWARD;
-  const sofr = getSeries(sMain, ["SOFR"]);
-
-  if (!tgcr || !rrpVol || !rrpRate) {
-    console.error("Faltan series en repo.json", Object.keys(sRepo));
-    container.innerHTML =
-      "<p style='color:#b42318'>Faltan series de repo en repo.json</p>";
-    return;
-  }
-
-  const traceTGCR = {
-    x: tgcr.dates,
-    y: tgcr.values,
-    name: "TGCR (repo GC)",
-    mode: "lines",
-    yaxis: "y1",
-  };
-
-  const traceRRPRate = {
-    x: rrpRate.dates,
-    y: rrpRate.values,
-    name: "ON RRP rate",
-    mode: "lines",
-    yaxis: "y1",
-  };
-
-  const traces = [traceTGCR, traceRRPRate];
-
-  if (sofr && sofr.dates && sofr.values) {
-    traces.push({
-      x: sofr.dates,
-      y: sofr.values,
+  const allData = plumbingRows;
+  const brushSeries = [
+    {
       name: "SOFR",
-      mode: "lines",
-      yaxis: "y1",
-    });
-  }
+      data: allData
+        .filter((r) => r.sofr != null)
+        .map((r) => ({ x: r.date, y: r.sofr * 100 })),
+    },
+  ];
 
-  const traceRRPVol = {
-    x: rrpVol.dates,
-    y: rrpVol.values,
-    name: "ON RRP volumen (USD bn)",
-    type: "bar",
-    opacity: 0.3,
-    yaxis: "y2",
-  };
-
-  traces.push(traceRRPVol);
-
-  const layout = {
-    barmode: "overlay",
-    margin: { t: 30, r: 60 },
-    legend: { orientation: "h" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1, label: "1M", step: "month", stepmode: "backward" },
-          { count: 3, label: "3M", step: "month", stepmode: "backward" },
-          { count: 6, label: "6M", step: "month", stepmode: "backward" },
-          { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" },
-        ],
+  const brushOptions = {
+    chart: {
+      id: "sofr-brush",
+      type: "area",
+      height: 120,
+      brush: { enabled: true, target: "sofr-main" },
+      selection: {
+        enabled: true,
+        xaxis: {
+          min: data.length ? data[0].date.getTime() : undefined,
+          max: data.length ? data[data.length - 1].date.getTime() : undefined,
+        },
       },
-      rangeslider: { visible: true },
     },
-    yaxis: {
-      title: "Tasa (%)",
-      side: "left",
-    },
-    yaxis2: {
-      title: "ON RRP volumen (USD bn)",
-      overlaying: "y",
-      side: "right",
-      showgrid: false,
-    },
+    series: brushSeries,
+    xaxis: { type: "datetime" },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+    stroke: { width: 1 },
   };
 
-  Plotly.newPlot("chart-repo", traces, layout);
+  if (charts.sofrMain) charts.sofrMain.destroy();
+  if (charts.sofrBrush) charts.sofrBrush.destroy();
+
+  charts.sofrMain = new ApexCharts(
+    document.getElementById("chart-sofr-main"),
+    mainOptions
+  );
+  charts.sofrBrush = new ApexCharts(
+    document.getElementById("chart-sofr-brush"),
+    brushOptions
+  );
+
+  charts.sofrMain.render();
+  charts.sofrBrush.render();
 }
 
-// ==============================
-//  Navegación entre gráficos
-// ==============================
+/* ---------- 2) Spread SOFR - IORB ---------- */
 
-const CHARTS = ["funding", "spread", "tga", "balance", "repo"];
+function buildSpreadChart() {
+  const range = panelRanges["panel-spread"];
 
-function setActiveChart(name) {
-  CHARTS.forEach((ch) => {
-    const panel = document.getElementById("panel-" + ch);
-    const btn = document.getElementById("btn-" + ch);
-    const isActive = ch === name;
+  const withSpread = plumbingRows
+    .filter((r) => r.sofr != null && r.iorb != null)
+    .map((r) => ({
+      date: r.date,
+      spread: (r.sofr - r.iorb) * 100, // pp
+    }));
 
-    if (panel) {
-      panel.classList.toggle("active", isActive);
-    }
-    if (btn) {
-      btn.classList.toggle("active", isActive);
-    }
-  });
+  const data = filterByRange(withSpread, range);
+
+  const seriesMain = [
+    {
+      name: "SOFR - IORB",
+      data: data.map((r) => ({ x: r.date, y: r.spread })),
+    },
+  ];
+
+  const mainOptions = {
+    chart: {
+      id: "spread-main",
+      type: "line",
+      height: 420,
+      toolbar: { show: true },
+      zoom: { enabled: true },
+    },
+    series: seriesMain,
+    xaxis: { type: "datetime" },
+    yaxis: {
+      title: { text: "Spread (pp)" },
+      labels: { formatter: (v) => v.toFixed(2) },
+    },
+    stroke: { width: 2, curve: "straight" },
+  };
+
+  const brushSeries = [
+    {
+      name: "SOFR - IORB",
+      data: withSpread.map((r) => ({ x: r.date, y: r.spread })),
+    },
+  ];
+
+  const brushOptions = {
+    chart: {
+      id: "spread-brush",
+      type: "area",
+      height: 120,
+      brush: { enabled: true, target: "spread-main" },
+      selection: {
+        enabled: true,
+        xaxis: {
+          min: data.length ? data[0].date.getTime() : undefined,
+          max: data.length ? data[data.length - 1].date.getTime() : undefined,
+        },
+      },
+    },
+    series: brushSeries,
+    xaxis: { type: "datetime" },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+    stroke: { width: 1 },
+  };
+
+  if (charts.spreadMain) charts.spreadMain.destroy();
+  if (charts.spreadBrush) charts.spreadBrush.destroy();
+
+  charts.spreadMain = new ApexCharts(
+    document.getElementById("chart-spread-main"),
+    mainOptions
+  );
+  charts.spreadBrush = new ApexCharts(
+    document.getElementById("chart-spread-brush"),
+    brushOptions
+  );
+
+  charts.spreadMain.render();
+  charts.spreadBrush.render();
 }
 
-// ==============================
-//  Init
-// ==============================
+/* ---------- 3) TGA ---------- */
 
-async function init() {
-  try {
-    const [mainData, tgaData, repoData] = await Promise.all([
-      loadData(),
-      loadTgaData(),
-      loadRepoData(),
-    ]);
+function buildTgaChart() {
+  const range = panelRanges["panel-tga"];
+  const data = filterByRange(tgaRows, range);
 
-    if (!mainData) return;
+  const seriesMain = [
+    {
+      name: "TGA",
+      data: data
+        .filter((r) => r.tga != null)
+        .map((r) => ({ x: r.date, y: r.tga / 1e3 })), // en Bn
+    },
+  ];
 
-    const lastUpdatedEl = document.getElementById("last-updated");
-    if (lastUpdatedEl) {
-      lastUpdatedEl.textContent =
-        "Última actualización (UTC): " + mainData.last_updated_utc;
-    }
+  const mainOptions = {
+    chart: {
+      id: "tga-main",
+      type: "area",
+      height: 420,
+      toolbar: { show: true },
+      zoom: { enabled: true },
+    },
+    series: seriesMain,
+    xaxis: { type: "datetime" },
+    yaxis: {
+      title: { text: "TGA (USD Bn)" },
+      labels: { formatter: (v) => v.toFixed(1) },
+    },
+    dataLabels: { enabled: false },
+    stroke: { curve: "straight", width: 2 },
+    fill: { opacity: 0.3 },
+  };
 
-    setCards(mainData);
-    plotFunding(mainData);
-    plotSpread(mainData);
+  const brushSeries = [
+    {
+      name: "TGA",
+      data: tgaRows
+        .filter((r) => r.tga != null)
+        .map((r) => ({ x: r.date, y: r.tga / 1e3 })),
+    },
+  ];
 
-    if (tgaData) {
-      plotTGA(tgaData);
-    }
+  const brushOptions = {
+    chart: {
+      id: "tga-brush",
+      type: "area",
+      height: 120,
+      brush: { enabled: true, target: "tga-main" },
+      selection: {
+        enabled: true,
+        xaxis: {
+          min: data.length ? data[0].date.getTime() : undefined,
+          max: data.length ? data[data.length - 1].date.getTime() : undefined,
+        },
+      },
+    },
+    series: brushSeries,
+    xaxis: { type: "datetime" },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+  };
 
-    plotBalance(mainData);
+  if (charts.tgaMain) charts.tgaMain.destroy();
+  if (charts.tgaBrush) charts.tgaBrush.destroy();
 
-    if (repoData) {
-      plotRepo(mainData, repoData);
-    }
+  charts.tgaMain = new ApexCharts(
+    document.getElementById("chart-tga-main"),
+    mainOptions
+  );
+  charts.tgaBrush = new ApexCharts(
+    document.getElementById("chart-tga-brush"),
+    brushOptions
+  );
 
-    // Dejamos por defecto el gráfico de tasas
-    setActiveChart("funding");
-  } catch (err) {
-    console.error("Error inicializando dashboard:", err);
+  charts.tgaMain.render();
+  charts.tgaBrush.render();
+}
+
+/* ---------- 4) WALCL ---------- */
+
+function buildWalclChart() {
+  const range = panelRanges["panel-walcl"];
+  const data = filterByRange(plumbingRows, range);
+
+  const seriesMain = [
+    {
+      name: "WALCL",
+      data: data
+        .filter((r) => r.walcl != null)
+        .map((r) => ({ x: r.date, y: r.walcl / 1e3 })), // Bn
+    },
+  ];
+
+  const mainOptions = {
+    chart: {
+      id: "walcl-main",
+      type: "area",
+      height: 420,
+      toolbar: { show: true },
+      zoom: { enabled: true },
+    },
+    series: seriesMain,
+    xaxis: { type: "datetime" },
+    yaxis: {
+      title: { text: "Balance Fed (USD Bn)" },
+      labels: { formatter: (v) => v.toFixed(0) },
+    },
+    stroke: { curve: "straight", width: 2 },
+    fill: { opacity: 0.4 },
+    dataLabels: { enabled: false },
+  };
+
+  const brushSeries = [
+    {
+      name: "WALCL",
+      data: plumbingRows
+        .filter((r) => r.walcl != null)
+        .map((r) => ({ x: r.date, y: r.walcl / 1e3 })),
+    },
+  ];
+
+  const brushOptions = {
+    chart: {
+      id: "walcl-brush",
+      type: "area",
+      height: 120,
+      brush: { enabled: true, target: "walcl-main" },
+      selection: {
+        enabled: true,
+        xaxis: {
+          min: data.length ? data[0].date.getTime() : undefined,
+          max: data.length ? data[data.length - 1].date.getTime() : undefined,
+        },
+      },
+    },
+    series: brushSeries,
+    xaxis: { type: "datetime" },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+  };
+
+  if (charts.walclMain) charts.walclMain.destroy();
+  if (charts.walclBrush) charts.walclBrush.destroy();
+
+  charts.walclMain = new ApexCharts(
+    document.getElementById("chart-walcl-main"),
+    mainOptions
+  );
+  charts.walclBrush = new ApexCharts(
+    document.getElementById("chart-walcl-brush"),
+    brushOptions
+  );
+
+  charts.walclMain.render();
+  charts.walclBrush.render();
+}
+
+/* ---------- 5) Repo & RRP ---------- */
+
+function buildRepoChart() {
+  const range = panelRanges["panel-repo"];
+  const data = filterByRange(repoRows, range);
+
+  const tgcrSeries = data
+    .filter((r) => r.tgcr != null)
+    .map((r) => ({ x: r.date, y: r.tgcr * 100 }));
+  const sofrSeries = data
+    .filter((r) => r.sofr != null)
+    .map((r) => ({ x: r.date, y: r.sofr * 100 }));
+  const onrrpSeries = data
+    .filter((r) => r.onrrp != null)
+    .map((r) => ({ x: r.date, y: r.onrrp * 100 }));
+
+  const mainOptions = {
+    chart: {
+      id: "repo-main",
+      type: "line",
+      height: 420,
+      toolbar: { show: true },
+      zoom: { enabled: true },
+    },
+    series: [
+      { name: "TGCR", data: tgcrSeries },
+      { name: "SOFR", data: sofrSeries },
+      { name: "ON RRP", data: onrrpSeries },
+    ],
+    xaxis: { type: "datetime" },
+    yaxis: {
+      title: { text: "Tasa (%)" },
+      labels: { formatter: (v) => v.toFixed(2) },
+    },
+    stroke: { width: 2 },
+    legend: { position: "top" },
+  };
+
+  const brushSeries = [
+    {
+      name: "TGCR",
+      data: repoRows
+        .filter((r) => r.tgcr != null)
+        .map((r) => ({ x: r.date, y: r.tgcr * 100 })),
+    },
+  ];
+
+  const brushOptions = {
+    chart: {
+      id: "repo-brush",
+      type: "area",
+      height: 120,
+      brush: { enabled: true, target: "repo-main" },
+      selection: {
+        enabled: true,
+        xaxis: {
+          min: data.length ? data[0].date.getTime() : undefined,
+          max: data.length ? data[data.length - 1].date.getTime() : undefined,
+        },
+      },
+    },
+    series: brushSeries,
+    xaxis: { type: "datetime" },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+    stroke: { width: 1 },
+  };
+
+  if (charts.repoMain) charts.repoMain.destroy();
+  if (charts.repoBrush) charts.repoBrush.destroy();
+
+  charts.repoMain = new ApexCharts(
+    document.getElementById("chart-repo-main"),
+    mainOptions
+  );
+  charts.repoBrush = new ApexCharts(
+    document.getElementById("chart-repo-brush"),
+    brushOptions
+  );
+
+  charts.repoMain.render();
+  charts.repoBrush.render();
+}
+
+/* ---------- Actualizar un panel cuando cambiás rango ---------- */
+
+function updateChartForPanel(panelId) {
+  switch (panelId) {
+    case "panel-sofr":
+      buildSofrChart();
+      break;
+    case "panel-spread":
+      buildSpreadChart();
+      break;
+    case "panel-tga":
+      buildTgaChart();
+      break;
+    case "panel-walcl":
+      buildWalclChart();
+      break;
+    case "panel-repo":
+      buildRepoChart();
+      break;
   }
 }
-
-init();
