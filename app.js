@@ -1,5 +1,5 @@
 // ==============================
-//  Helpers generales
+//  Helpers generales de carga
 // ==============================
 
 // Carga principal (plumbing_data.json)
@@ -11,7 +11,10 @@ async function loadData() {
       return null;
     }
     const data = await res.json();
-    console.log("plumbing_data.json cargado, series:", Object.keys(data.series || {}));
+    console.log(
+      "plumbing_data.json cargado, series:",
+      Object.keys(data.series || {})
+    );
     return data;
   } catch (err) {
     console.error("Error cargando plumbing_data.json:", err);
@@ -65,10 +68,10 @@ function getSeries(seriesObj, keys) {
 // Para el eje Y de tasas: rango [min, max] + padding
 function computeRateRange(seriesObj, keys, padding) {
   const all = [];
-  keys.forEach(k => {
+  keys.forEach((k) => {
     const s = seriesObj[k];
     if (s && Array.isArray(s.values)) {
-      s.values.forEach(v => {
+      s.values.forEach((v) => {
         if (typeof v === "number" && !isNaN(v)) {
           all.push(v);
         }
@@ -108,10 +111,12 @@ function buildMonthQuarterEndShapes(dateStrings) {
       y1: 1,
       line: {
         width: isQuarterEnd ? 2 : 1,
-        color: isQuarterEnd ? "rgba(180, 52, 24, 0.6)" : "rgba(0,0,0,0.15)",
-        dash: isQuarterEnd ? "solid" : "dot"
+        color: isQuarterEnd
+          ? "rgba(180, 52, 24, 0.6)"
+          : "rgba(0,0,0,0.15)",
+        dash: isQuarterEnd ? "solid" : "dot",
       },
-      layer: isQuarterEnd ? "above" : "below"
+      layer: isQuarterEnd ? "above" : "below",
     });
 
     d.setMonth(d.getMonth() + 1);
@@ -133,16 +138,16 @@ function setCards(data) {
   const effr = getSeries(s, ["EFFR"]);
   const iorb = getSeries(s, ["IORB"]);
 
-  const last = serie => {
+  const last = (serie) => {
     if (!serie || !serie.values || serie.values.length === 0) return null;
     return serie.values[serie.values.length - 1];
   };
 
-  const soffLast = last(sofr);
+  const sofrLast = last(sofr);
   const effrLast = last(effr);
   const iorbLast = last(iorb);
   const spreadLast =
-    soffLast != null && iorbLast != null ? soffLast - iorbLast : null;
+    sofrLast != null && iorbLast != null ? sofrLast - iorbLast : null;
 
   const setCardText = (id, val, suffix) => {
     const el = document.getElementById(id);
@@ -154,7 +159,7 @@ function setCards(data) {
     el.textContent = val.toFixed(2) + (suffix || "");
   };
 
-  setCardText("card-sofr", soffLast, " %");
+  setCardText("card-sofr", sofrLast, " %");
   setCardText("card-effr", effrLast, " %");
   setCardText("card-iorb", iorbLast, " %");
   setCardText("card-spread", spreadLast, " pp");
@@ -181,21 +186,21 @@ function plotFunding(data) {
     x: sofr.dates,
     y: sofr.values,
     name: "SOFR",
-    mode: "lines"
+    mode: "lines",
   };
 
   const traceEFFR = {
     x: effr.dates,
     y: effr.values,
     name: "EFFR",
-    mode: "lines"
+    mode: "lines",
   };
 
   const traceIORB = {
     x: iorb.dates,
     y: iorb.values,
     name: "IORB",
-    mode: "lines"
+    mode: "lines",
   };
 
   const yRange = computeRateRange(s, ["SOFR", "EFFR", "IORB"], 0.15);
@@ -211,16 +216,16 @@ function plotFunding(data) {
           { count: 3, label: "3M", step: "month", stepmode: "backward" },
           { count: 6, label: "6M", step: "month", stepmode: "backward" },
           { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
+          { step: "all", label: "Todos" },
+        ],
       },
-      rangeslider: { visible: true }
+      rangeslider: { visible: true },
     },
     yaxis: {
       title: "Tasa (%)",
-      range: yRange || undefined
+      range: yRange || undefined,
     },
-    shapes: buildMonthQuarterEndShapes(sofr.dates)
+    shapes: buildMonthQuarterEndShapes(sofr.dates),
   };
 
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
@@ -260,7 +265,7 @@ function plotSpread(data) {
     x: dates,
     y: spread,
     name: "SOFR - IORB",
-    mode: "lines"
+    mode: "lines",
   };
 
   const layout = {
@@ -274,14 +279,14 @@ function plotSpread(data) {
           { count: 3, label: "3M", step: "month", stepmode: "backward" },
           { count: 6, label: "6M", step: "month", stepmode: "backward" },
           { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
+          { step: "all", label: "Todos" },
+        ],
       },
-      rangeslider: { visible: true }
+      rangeslider: { visible: true },
     },
     yaxis: {
-      title: "Spread (pp)"
-    }
+      title: "Spread (pp)",
+    },
   };
 
   Plotly.newPlot("chart-spread", [traceSpread], layout);
@@ -307,7 +312,7 @@ function plotTGA(tgaData) {
     y: tga.values,
     name: "TGA (USD bn)",
     type: "scatter",
-    fill: "tozeroy"
+    fill: "tozeroy",
   };
 
   const layout = {
@@ -321,14 +326,14 @@ function plotTGA(tgaData) {
           { count: 3, label: "3M", step: "month", stepmode: "backward" },
           { count: 6, label: "6M", step: "month", stepmode: "backward" },
           { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
+          { step: "all", label: "Todos" },
+        ],
       },
-      rangeslider: { visible: true }
+      rangeslider: { visible: true },
     },
     yaxis: {
-      title: "TGA (USD bn)"
-    }
+      title: "TGA (USD bn)",
+    },
   };
 
   Plotly.newPlot("chart-tga", [traceTGA], layout);
@@ -354,7 +359,7 @@ function plotBalance(data) {
     y: walcl.values,
     name: "Balance de la Fed (USD bn)",
     type: "scatter",
-    fill: "tozeroy"
+    fill: "tozeroy",
   };
 
   const layout = {
@@ -368,14 +373,14 @@ function plotBalance(data) {
           { count: 3, label: "3M", step: "month", stepmode: "backward" },
           { count: 6, label: "6M", step: "month", stepmode: "backward" },
           { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
+          { step: "all", label: "Todos" },
+        ],
       },
-      rangeslider: { visible: true }
+      rangeslider: { visible: true },
     },
     yaxis: {
-      title: "Balance Fed (USD bn)"
-    }
+      title: "Balance Fed (USD bn)",
+    },
   };
 
   Plotly.newPlot("chart-balance", [traceBal], layout);
@@ -419,7 +424,7 @@ function plotRepo(mainData, repoData) {
     y: tgcr.values,
     name: "TGCR (repo GC)",
     mode: "lines",
-    yaxis: "y1"
+    yaxis: "y1",
   };
 
   const traceRRPRate = {
@@ -427,7 +432,7 @@ function plotRepo(mainData, repoData) {
     y: rrpRate.values,
     name: "ON RRP rate",
     mode: "lines",
-    yaxis: "y1"
+    yaxis: "y1",
   };
 
   const traces = [traceTGCR, traceRRPRate];
@@ -438,7 +443,7 @@ function plotRepo(mainData, repoData) {
       y: sofr.values,
       name: "SOFR",
       mode: "lines",
-      yaxis: "y1"
+      yaxis: "y1",
     });
   }
 
@@ -448,7 +453,7 @@ function plotRepo(mainData, repoData) {
     name: "ON RRP volumen (USD bn)",
     type: "bar",
     opacity: 0.3,
-    yaxis: "y2"
+    yaxis: "y2",
   };
 
   traces.push(traceRRPVol);
@@ -465,24 +470,45 @@ function plotRepo(mainData, repoData) {
           { count: 3, label: "3M", step: "month", stepmode: "backward" },
           { count: 6, label: "6M", step: "month", stepmode: "backward" },
           { count: 1, label: "1A", step: "year", stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
+          { step: "all", label: "Todos" },
+        ],
       },
-      rangeslider: { visible: true }
+      rangeslider: { visible: true },
     },
     yaxis: {
       title: "Tasa (%)",
-      side: "left"
+      side: "left",
     },
     yaxis2: {
       title: "ON RRP volumen (USD bn)",
       overlaying: "y",
       side: "right",
-      showgrid: false
-    }
+      showgrid: false,
+    },
   };
 
   Plotly.newPlot("chart-repo", traces, layout);
+}
+
+// ==============================
+//  Navegación entre gráficos
+// ==============================
+
+const CHARTS = ["funding", "spread", "tga", "balance", "repo"];
+
+function setActiveChart(name) {
+  CHARTS.forEach((ch) => {
+    const panel = document.getElementById("panel-" + ch);
+    const btn = document.getElementById("btn-" + ch);
+    const isActive = ch === name;
+
+    if (panel) {
+      panel.classList.toggle("active", isActive);
+    }
+    if (btn) {
+      btn.classList.toggle("active", isActive);
+    }
+  });
 }
 
 // ==============================
@@ -494,7 +520,7 @@ async function init() {
     const [mainData, tgaData, repoData] = await Promise.all([
       loadData(),
       loadTgaData(),
-      loadRepoData()
+      loadRepoData(),
     ]);
 
     if (!mainData) return;
@@ -518,6 +544,9 @@ async function init() {
     if (repoData) {
       plotRepo(mainData, repoData);
     }
+
+    // Por defecto mostramos el gráfico de tasas
+    setActiveChart("funding");
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
   }
