@@ -135,13 +135,7 @@ body {
 
 .chart-main {
   width: 100%;
-  height: 420px;
-}
-
-.chart-brush {
-  width: 100%;
-  height: 120px;
-  margin-top: 8px;
+  height: 460px;
 }
 
 /* Responsive */
@@ -155,4 +149,3 @@ body {
     height: 360px;
   }
 }
-
