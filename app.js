@@ -23,6 +23,21 @@ async function loadTgaData() {
   console.log("Series TGA:", Object.keys(data.series));
   return data;
 }
+async function loadRepoData() {
+  try {
+    const res = await fetch("data/repo.json");
+    if (!res.ok) {
+      console.error("No se pudo cargar repo.json:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    console.log("repo.json cargado, series:", Object.keys(data.series || {}));
+    return data;
+  } catch (err) {
+    console.error("Error cargando repo.json:", err);
+    return null;
+  }
+}
 
 // --------- Helpers ---------
 
@@ -209,10 +224,10 @@ function plotBalance(data) {
 
 async function init() {
   try {
-    // Cargamos en paralelo: datos principales + TGA aparte
-    const [mainData, tgaData] = await Promise.all([
+    const [mainData, tgaData, repoData] = await Promise.all([
       loadData(),
-      loadTgaData()
+      loadTgaData(),
+      loadRepoData()
     ]);
 
     if (!mainData) return;
@@ -225,9 +240,16 @@ async function init() {
 
     setCards(mainData);
     plotFunding(mainData);
+    plotSpread(mainData);
+
     if (tgaData) {
       plotTGA(tgaData);
     }
+
+    if (repoData) {
+      plotRepo(mainData, repoData);   // 👈 nuevo
+    }
+
     plotBalance(mainData);
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
