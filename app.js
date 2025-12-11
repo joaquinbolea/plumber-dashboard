@@ -1,8 +1,7 @@
 // ==============================
-//  Helpers generales de carga
+//  Helpers de carga de datos
 // ==============================
 
-// Carga principal (plumbing_data.json)
 async function loadData() {
   try {
     const res = await fetch("data/plumbing_data.json");
@@ -11,10 +10,6 @@ async function loadData() {
       return null;
     }
     const data = await res.json();
-    console.log(
-      "plumbing_data.json cargado, series:",
-      Object.keys(data.series || {})
-    );
     return data;
   } catch (err) {
     console.error("Error cargando plumbing_data.json:", err);
@@ -22,7 +17,6 @@ async function loadData() {
   }
 }
 
-// Carga TGA
 async function loadTgaData() {
   try {
     const res = await fetch("data/tga_data.json");
@@ -31,7 +25,6 @@ async function loadTgaData() {
       return null;
     }
     const data = await res.json();
-    console.log("tga_data.json cargado, series:", Object.keys(data.series || {}));
     return data;
   } catch (err) {
     console.error("Error cargando tga_data.json:", err);
@@ -39,7 +32,6 @@ async function loadTgaData() {
   }
 }
 
-// Carga Repo / RRP
 async function loadRepoData() {
   try {
     const res = await fetch("data/repo.json");
@@ -48,7 +40,6 @@ async function loadRepoData() {
       return null;
     }
     const data = await res.json();
-    console.log("repo.json cargado, series:", Object.keys(data.series || {}));
     return data;
   } catch (err) {
     console.error("Error cargando repo.json:", err);
@@ -56,7 +47,7 @@ async function loadRepoData() {
   }
 }
 
-// Devuelve la primera serie que exista en una lista de claves
+// Toma la primera serie que encuentre de una lista de claves
 function getSeries(seriesObj, keys) {
   if (!seriesObj) return null;
   for (const k of keys) {
@@ -65,7 +56,7 @@ function getSeries(seriesObj, keys) {
   return null;
 }
 
-// Para el eje Y de tasas: rango [min, max] + padding
+// Calcula rango de tasas con padding
 function computeRateRange(seriesObj, keys, padding) {
   const all = [];
   keys.forEach((k) => {
@@ -86,7 +77,7 @@ function computeRateRange(seriesObj, keys, padding) {
   return [min - padding, max + padding];
 }
 
-// Líneas verticales para cierres de mes / trimestre
+// Líneas de fin de mes / trimestre
 function buildMonthQuarterEndShapes(dateStrings) {
   if (!dateStrings || dateStrings.length === 0) return [];
 
@@ -126,14 +117,13 @@ function buildMonthQuarterEndShapes(dateStrings) {
 }
 
 // ==============================
-//  Cards de arriba
+//  Cards
 // ==============================
 
 function setCards(data) {
   if (!data || !data.series) return;
 
   const s = data.series;
-
   const sofr = getSeries(s, ["SOFR"]);
   const effr = getSeries(s, ["EFFR"]);
   const iorb = getSeries(s, ["IORB"]);
@@ -300,7 +290,7 @@ function plotTGA(tgaData) {
   if (!tgaData || !tgaData.series) return;
 
   const s = tgaData.series;
-  const tga = getSeries(s, ["TGA", "WTREGEN"]); // por las dudas
+  const tga = getSeries(s, ["TGA", "WTREGEN"]);
 
   if (!tga) {
     console.error("No se encontró la serie TGA en tga_data.json");
@@ -331,16 +321,14 @@ function plotTGA(tgaData) {
       },
       rangeslider: { visible: true },
     },
-    yaxis: {
-      title: "TGA (USD bn)",
-    },
+    yaxis: { title: "TGA (USD bn)" },
   };
 
   Plotly.newPlot("chart-tga", [traceTGA], layout);
 }
 
 // ==============================
-//  Gráfico 4: Balance de la Fed (WALCL)
+//  Gráfico 4: Balance Fed (WALCL)
 // ==============================
 
 function plotBalance(data) {
@@ -348,7 +336,6 @@ function plotBalance(data) {
   const s = data.series;
 
   const walcl = getSeries(s, ["WALCL"]);
-
   if (!walcl) {
     console.error("No se encontró WALCL en plumbing_data.json");
     return;
@@ -378,16 +365,14 @@ function plotBalance(data) {
       },
       rangeslider: { visible: true },
     },
-    yaxis: {
-      title: "Balance Fed (USD bn)",
-    },
+    yaxis: { title: "Balance Fed (USD bn)" },
   };
 
   Plotly.newPlot("chart-balance", [traceBal], layout);
 }
 
 // ==============================
-//  Gráfico 5: Repo & RRP (TGCR, SOFR, ON RRP)
+//  Gráfico 5: Repo & RRP
 // ==============================
 
 function plotRepo(mainData, repoData) {
@@ -545,7 +530,7 @@ async function init() {
       plotRepo(mainData, repoData);
     }
 
-    // Por defecto mostramos el gráfico de tasas
+    // Dejamos por defecto el gráfico de tasas
     setActiveChart("funding");
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
