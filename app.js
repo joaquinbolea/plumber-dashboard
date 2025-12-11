@@ -1,33 +1,47 @@
-// --------- Carga de datos principales (plumbing_data.json) ---------
+// ==============================
+//  Helpers generales
+// ==============================
 
+// Carga principal (plumbing_data.json)
 async function loadData() {
-  const res = await fetch("data/plumbing_data.json");
-  if (!res.ok) {
-    console.error("No se pudo cargar plumbing_data.json", res.status);
+  try {
+    const res = await fetch("data/plumbing_data.json");
+    if (!res.ok) {
+      console.error("No se pudo cargar plumbing_data.json:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    console.log("plumbing_data.json cargado, series:", Object.keys(data.series || {}));
+    return data;
+  } catch (err) {
+    console.error("Error cargando plumbing_data.json:", err);
     return null;
   }
-  const data = await res.json();
-  console.log("Series main:", Object.keys(data.series));
-  return data;
 }
 
-// --------- Carga de datos de TGA (tga.json) ---------
-
+// Carga TGA
 async function loadTgaData() {
-  const res = await fetch("data/tga.json");
-  if (!res.ok) {
-    console.error("No se pudo cargar tga.json", res.status);
+  try {
+    const res = await fetch("data/tga_data.json");
+    if (!res.ok) {
+      console.warn("No se pudo cargar tga_data.json:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    console.log("tga_data.json cargado, series:", Object.keys(data.series || {}));
+    return data;
+  } catch (err) {
+    console.error("Error cargando tga_data.json:", err);
     return null;
   }
-  const data = await res.json();
-  console.log("Series TGA:", Object.keys(data.series));
-  return data;
 }
+
+// Carga Repo / RRP
 async function loadRepoData() {
   try {
     const res = await fetch("data/repo.json");
     if (!res.ok) {
-      console.error("No se pudo cargar repo.json:", res.status);
+      console.warn("No se pudo cargar repo.json:", res.status);
       return null;
     }
     const data = await res.json();
@@ -39,64 +53,127 @@ async function loadRepoData() {
   }
 }
 
-// --------- Helpers ---------
-
-function last(arr) {
-  return arr[arr.length - 1];
-}
-
-// Busca la primera serie existente entre los nombres dados
-function getSeries(seriesObj, preferredNames) {
-  for (const name of preferredNames) {
-    if (seriesObj[name]) {
-      return seriesObj[name];
-    }
+// Devuelve la primera serie que exista en una lista de claves
+function getSeries(seriesObj, keys) {
+  if (!seriesObj) return null;
+  for (const k of keys) {
+    if (seriesObj[k]) return seriesObj[k];
   }
-  console.error("No se encontró ninguna de las series:", preferredNames);
   return null;
 }
 
-// --------- Tarjetas superiores (SOFR / EFFR / IORB / Spread) ---------
+// Para el eje Y de tasas: rango [min, max] + padding
+function computeRateRange(seriesObj, keys, padding) {
+  const all = [];
+  keys.forEach(k => {
+    const s = seriesObj[k];
+    if (s && Array.isArray(s.values)) {
+      s.values.forEach(v => {
+        if (typeof v === "number" && !isNaN(v)) {
+          all.push(v);
+        }
+      });
+    }
+  });
 
-function setCards(data) {
-  const s = data.series;
+  if (all.length === 0) return null;
 
-  const sofr   = getSeries(s, ["SOFR"]);
-  const effr   = getSeries(s, ["EFFR", "FEDFUNDS"]);
-  const iorb   = getSeries(s, ["IORB"]);
-  const spread = getSeries(s, ["SOFR_minus_IORB"]);
-
-  if (!sofr || !effr || !iorb || !spread) {
-    console.error("Faltan series para armar las cards");
-    return;
-  }
-
-  const sofrLast   = last(sofr.values).toFixed(2);
-  const effrLast   = last(effr.values).toFixed(2);
-  const iorbLast   = last(iorb.values).toFixed(2);
-  const spreadLast = last(spread.values).toFixed(2);
-
-  document.getElementById("card-sofr").innerHTML =
-    `<h3>SOFR</h3><p>${sofrLast} %</p>`;
-  document.getElementById("card-effr").innerHTML =
-    `<h3>EFFR</h3><p>${effrLast} %</p>`;
-  document.getElementById("card-iorb").innerHTML =
-    `<h3>IORB</h3><p>${iorbLast} %</p>`;
-  document.getElementById("card-spread").innerHTML =
-    `<h3>SOFR - IORB</h3><p>${spreadLast} pp</p>`;
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  return [min - padding, max + padding];
 }
 
-// --------- Gráfico SOFR vs EFFR/FEDFUNDS vs IORB ---------
+// Líneas verticales para cierres de mes / trimestre
+function buildMonthQuarterEndShapes(dateStrings) {
+  if (!dateStrings || dateStrings.length === 0) return [];
 
-function plotFunding(data) {
+  const firstDate = new Date(dateStrings[0]);
+  const lastDate = new Date(dateStrings[dateStrings.length - 1]);
+
+  const shapes = [];
+  const d = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+
+  while (d <= lastDate) {
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const iso = monthEnd.toISOString().slice(0, 10);
+    const isQuarterEnd = [2, 5, 8, 11].includes(monthEnd.getMonth());
+
+    shapes.push({
+      type: "line",
+      xref: "x",
+      yref: "paper",
+      x0: iso,
+      x1: iso,
+      y0: 0,
+      y1: 1,
+      line: {
+        width: isQuarterEnd ? 2 : 1,
+        color: isQuarterEnd ? "rgba(180, 52, 24, 0.6)" : "rgba(0,0,0,0.15)",
+        dash: isQuarterEnd ? "solid" : "dot"
+      },
+      layer: isQuarterEnd ? "above" : "below"
+    });
+
+    d.setMonth(d.getMonth() + 1);
+  }
+
+  return shapes;
+}
+
+// ==============================
+//  Cards de arriba
+// ==============================
+
+function setCards(data) {
+  if (!data || !data.series) return;
+
   const s = data.series;
 
   const sofr = getSeries(s, ["SOFR"]);
-  const effr = getSeries(s, ["EFFR", "FEDFUNDS"]);
+  const effr = getSeries(s, ["EFFR"]);
+  const iorb = getSeries(s, ["IORB"]);
+
+  const last = serie => {
+    if (!serie || !serie.values || serie.values.length === 0) return null;
+    return serie.values[serie.values.length - 1];
+  };
+
+  const soffLast = last(sofr);
+  const effrLast = last(effr);
+  const iorbLast = last(iorb);
+  const spreadLast =
+    soffLast != null && iorbLast != null ? soffLast - iorbLast : null;
+
+  const setCardText = (id, val, suffix) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val == null || isNaN(val)) {
+      el.textContent = "-";
+      return;
+    }
+    el.textContent = val.toFixed(2) + (suffix || "");
+  };
+
+  setCardText("card-sofr", soffLast, " %");
+  setCardText("card-effr", effrLast, " %");
+  setCardText("card-iorb", iorbLast, " %");
+  setCardText("card-spread", spreadLast, " pp");
+}
+
+// ==============================
+//  Gráfico 1: SOFR vs EFFR vs IORB
+// ==============================
+
+function plotFunding(data) {
+  if (!data || !data.series) return;
+  const s = data.series;
+
+  const sofr = getSeries(s, ["SOFR"]);
+  const effr = getSeries(s, ["EFFR"]);
   const iorb = getSeries(s, ["IORB"]);
 
   if (!sofr || !effr || !iorb) {
-    console.error("Faltan series para el gráfico de funding");
+    console.error("Faltan series para plotFunding");
     return;
   }
 
@@ -106,12 +183,14 @@ function plotFunding(data) {
     name: "SOFR",
     mode: "lines"
   };
+
   const traceEFFR = {
     x: effr.dates,
     y: effr.values,
     name: "EFFR",
     mode: "lines"
   };
+
   const traceIORB = {
     x: iorb.dates,
     y: iorb.values,
@@ -119,74 +198,204 @@ function plotFunding(data) {
     mode: "lines"
   };
 
+  const yRange = computeRateRange(s, ["SOFR", "EFFR", "IORB"], 0.15);
+
   const layout = {
-    margin: { t: 30 },
+    margin: { t: 30, r: 40 },
     legend: { orientation: "h" },
-    yaxis: { title: "Tasa (%)" },
     xaxis: {
       type: "date",
       rangeselector: {
         buttons: [
-          { count: 5,  label: "5D",  step: "day",   stepmode: "backward" },
-          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
-          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
-          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
-          { count: 1,  label: "YTD", step: "year",  stepmode: "todate"   },
-          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
-          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "1A", step: "year", stepmode: "backward" },
           { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
-    }
+    },
+    yaxis: {
+      title: "Tasa (%)",
+      range: yRange || undefined
+    },
+    shapes: buildMonthQuarterEndShapes(sofr.dates)
   };
 
   Plotly.newPlot("chart-funding", [traceSOFR, traceEFFR, traceIORB], layout);
 }
 
-// --------- Gráfico TGA (tga.json separado) ---------
+// ==============================
+//  Gráfico 2: Spread SOFR - IORB
+// ==============================
 
-function plotTGA(tgaData) {
-  if (!tgaData || !tgaData.series || !tgaData.series.TGA) {
-    console.error("No hay datos de TGA para graficar");
+function plotSpread(data) {
+  if (!data || !data.series) return;
+
+  const s = data.series;
+  const sofr = getSeries(s, ["SOFR"]);
+  const iorb = getSeries(s, ["IORB"]);
+
+  if (!sofr || !iorb) {
+    console.error("Faltan series para plotSpread");
     return;
   }
 
-  const tga = tgaData.series.TGA;
+  const dates = [];
+  const spread = [];
 
-  const trace = {
-    x: tga.dates,
-    y: tga.values.map(v => v / 1000), // millones -> miles de millones
-    name: "TGA",
-    mode: "lines",
-    fill: "tozeroy"
+  const n = Math.min(sofr.dates.length, iorb.dates.length);
+
+  for (let i = 0; i < n; i++) {
+    const dS = sofr.dates[i];
+    const dI = iorb.dates[i];
+    if (dS === dI) {
+      dates.push(dS);
+      spread.push(sofr.values[i] - iorb.values[i]);
+    }
+  }
+
+  const traceSpread = {
+    x: dates,
+    y: spread,
+    name: "SOFR - IORB",
+    mode: "lines"
   };
 
   const layout = {
-    margin: { t: 30 },
-    yaxis: { title: "TGA (USD bn)" },
+    margin: { t: 30, r: 40 },
+    legend: { orientation: "h" },
     xaxis: {
       type: "date",
       rangeselector: {
         buttons: [
-          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
-          { count: 3,  label: "3A",  step: "year",  stepmode: "backward" },
-          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "1A", step: "year", stepmode: "backward" },
           { step: "all", label: "Todos" }
         ]
       },
       rangeslider: { visible: true }
+    },
+    yaxis: {
+      title: "Spread (pp)"
     }
   };
 
-  Plotly.newPlot("chart-tga", [trace], layout);
+  Plotly.newPlot("chart-spread", [traceSpread], layout);
 }
-//-------------------------------------------------
-// --------- Panel de Repo & RRP ---------
+
+// ==============================
+//  Gráfico 3: TGA
+// ==============================
+
+function plotTGA(tgaData) {
+  if (!tgaData || !tgaData.series) return;
+
+  const s = tgaData.series;
+  const tga = getSeries(s, ["TGA", "WTREGEN"]); // por las dudas
+
+  if (!tga) {
+    console.error("No se encontró la serie TGA en tga_data.json");
+    return;
+  }
+
+  const traceTGA = {
+    x: tga.dates,
+    y: tga.values,
+    name: "TGA (USD bn)",
+    type: "scatter",
+    fill: "tozeroy"
+  };
+
+  const layout = {
+    margin: { t: 30, r: 40 },
+    legend: { orientation: "h" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "1A", step: "year", stepmode: "backward" },
+          { step: "all", label: "Todos" }
+        ]
+      },
+      rangeslider: { visible: true }
+    },
+    yaxis: {
+      title: "TGA (USD bn)"
+    }
+  };
+
+  Plotly.newPlot("chart-tga", [traceTGA], layout);
+}
+
+// ==============================
+//  Gráfico 4: Balance de la Fed (WALCL)
+// ==============================
+
+function plotBalance(data) {
+  if (!data || !data.series) return;
+  const s = data.series;
+
+  const walcl = getSeries(s, ["WALCL"]);
+
+  if (!walcl) {
+    console.error("No se encontró WALCL en plumbing_data.json");
+    return;
+  }
+
+  const traceBal = {
+    x: walcl.dates,
+    y: walcl.values,
+    name: "Balance de la Fed (USD bn)",
+    type: "scatter",
+    fill: "tozeroy"
+  };
+
+  const layout = {
+    margin: { t: 30, r: 40 },
+    legend: { orientation: "h" },
+    xaxis: {
+      type: "date",
+      rangeselector: {
+        buttons: [
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "1A", step: "year", stepmode: "backward" },
+          { step: "all", label: "Todos" }
+        ]
+      },
+      rangeslider: { visible: true }
+    },
+    yaxis: {
+      title: "Balance Fed (USD bn)"
+    }
+  };
+
+  Plotly.newPlot("chart-balance", [traceBal], layout);
+}
+
+// ==============================
+//  Gráfico 5: Repo & RRP (TGCR, SOFR, ON RRP)
+// ==============================
 
 function plotRepo(mainData, repoData) {
+  const container = document.getElementById("chart-repo");
+  if (!container) {
+    console.error("No existe el contenedor chart-repo");
+    return;
+  }
+
   if (!repoData || !repoData.series) {
-    console.error("repoData vacío");
+    console.error("repoData vacío o sin series");
+    container.innerHTML =
+      "<p style='color:#b42318'>No se pudo cargar repo.json</p>";
     return;
   }
 
@@ -199,16 +408,12 @@ function plotRepo(mainData, repoData) {
   const sofr = getSeries(sMain, ["SOFR"]);
 
   if (!tgcr || !rrpVol || !rrpRate) {
-    console.error("Faltan series de repo en repo.json");
-    const container = document.getElementById("chart-repo");
-    if (container) {
-      container.innerHTML =
-        "<p style='color:#b42318'>Faltan series de repo en repo.json</p>";
-    }
+    console.error("Faltan series en repo.json", Object.keys(sRepo));
+    container.innerHTML =
+      "<p style='color:#b42318'>Faltan series de repo en repo.json</p>";
     return;
   }
 
-  // Trazas de tasas (TGCR, SOFR, RRP award)
   const traceTGCR = {
     x: tgcr.dates,
     y: tgcr.values,
@@ -227,7 +432,7 @@ function plotRepo(mainData, repoData) {
 
   const traces = [traceTGCR, traceRRPRate];
 
-  if (sofr) {
+  if (sofr && sofr.dates && sofr.values) {
     traces.push({
       x: sofr.dates,
       y: sofr.values,
@@ -237,10 +442,9 @@ function plotRepo(mainData, repoData) {
     });
   }
 
-  // Volumen del ON RRP (barras, eje derecho)
   const traceRRPVol = {
     x: rrpVol.dates,
-    y: rrpVol.values, // ya viene en miles de millones desde FRED
+    y: rrpVol.values,
     name: "ON RRP volumen (USD bn)",
     type: "bar",
     opacity: 0.3,
@@ -251,16 +455,16 @@ function plotRepo(mainData, repoData) {
 
   const layout = {
     barmode: "overlay",
-    margin: { t: 30 },
+    margin: { t: 30, r: 60 },
     legend: { orientation: "h" },
     xaxis: {
       type: "date",
       rangeselector: {
         buttons: [
-          { count: 1,  label: "1M",  step: "month", stepmode: "backward" },
-          { count: 3,  label: "3M",  step: "month", stepmode: "backward" },
-          { count: 6,  label: "6M",  step: "month", stepmode: "backward" },
-          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
+          { count: 1, label: "1M", step: "month", stepmode: "backward" },
+          { count: 3, label: "3M", step: "month", stepmode: "backward" },
+          { count: 6, label: "6M", step: "month", stepmode: "backward" },
+          { count: 1, label: "1A", step: "year", stepmode: "backward" },
           { step: "all", label: "Todos" }
         ]
       },
@@ -281,45 +485,9 @@ function plotRepo(mainData, repoData) {
   Plotly.newPlot("chart-repo", traces, layout);
 }
 
-// --------- Gráfico Balance Fed (WALCL) ---------
-
-function plotBalance(data) {
-  const s = data.series;
-  const walcl = getSeries(s, ["WALCL"]);
-  if (!walcl) {
-    console.error("No se encontró la serie WALCL");
-    return;
-  }
-
-  const trace = {
-    x: walcl.dates,
-    y: walcl.values.map(v => v / 1000), // millones -> miles de millones
-    name: "WALCL",
-    mode: "lines",
-    fill: "tozeroy"
-  };
-
-  const layout = {
-    margin: { t: 30 },
-    yaxis: { title: "Balance Fed (USD bn)" },
-    xaxis: {
-      type: "date",
-      rangeselector: {
-        buttons: [
-          { count: 1,  label: "1A",  step: "year",  stepmode: "backward" },
-          { count: 3,  label: "3A",  step: "year",  stepmode: "backward" },
-          { count: 5,  label: "5A",  step: "year",  stepmode: "backward" },
-          { step: "all", label: "Todos" }
-        ]
-      },
-      rangeslider: { visible: true }
-    }
-  };
-
-  Plotly.newPlot("chart-balance", [trace], layout);
-}
-
-// --------- Inicialización ---------
+// ==============================
+//  Init
+// ==============================
 
 async function init() {
   try {
@@ -345,15 +513,14 @@ async function init() {
       plotTGA(tgaData);
     }
 
-    if (repoData) {
-      plotRepo(mainData, repoData);   // 👈 nuevo
-    }
-
     plotBalance(mainData);
+
+    if (repoData) {
+      plotRepo(mainData, repoData);
+    }
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
   }
 }
 
 init();
-
