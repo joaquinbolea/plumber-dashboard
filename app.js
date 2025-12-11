@@ -1,11 +1,11 @@
-// app.js
+// app.js – versión simplificada: 1 gráfico por pestaña, sin brush
 
 let plumbingRows = [];
 let tgaRows = [];
-let repoRows = []; // lo tomamos desde plumbingRows (TGCR, SOFR, ONRRP), pero dejo separado por si en el futuro hay otro JSON.
 
-let charts = {};
+const charts = {};          // charts[panelId]
 let activePanel = "panel-sofr";
+
 const panelRanges = {
   "panel-sofr": "6M",
   "panel-spread": "6M",
@@ -41,26 +41,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       }))
       .sort((a, b) => a.date - b.date);
 
-    repoRows = plumbingRows; // por ahora usamos las tasas del mismo JSON
-
     updateCards();
     setupTabs();
     setupRangeButtons();
 
-    buildAllCharts();
+    // construimos sólo el panel inicial
+    buildChartForPanel(activePanel);
+
     updateLastUpdateLabel();
   } catch (err) {
     console.error("Error inicializando dashboard:", err);
   }
 });
 
-/* ---------- Helpers básicos ---------- */
+/* ---------- Helpers ---------- */
 
 async function fetchJson(path) {
   const resp = await fetch(path);
-  if (!resp.ok) {
-    throw new Error(`No se pudo leer ${path}`);
-  }
+  if (!resp.ok) throw new Error(`No se pudo leer ${path}`);
   return resp.json();
 }
 
@@ -79,11 +77,6 @@ function formatSpreadPp(x) {
   return x.toFixed(2) + " pp";
 }
 
-function formatBillions(x) {
-  if (x == null || !Number.isFinite(x)) return "–";
-  return (x / 1e3).toFixed(1) + " Bn";
-}
-
 function getLastNonNull(arr, field) {
   for (let i = arr.length - 1; i >= 0; i--) {
     const v = arr[i][field];
@@ -92,8 +85,6 @@ function getLastNonNull(arr, field) {
   return null;
 }
 
-/* ---------- Cards superiores ---------- */
-
 function updateCards() {
   if (!plumbingRows.length) return;
 
@@ -101,22 +92,20 @@ function updateCards() {
   const lastEffr = getLastNonNull(plumbingRows, "effr");
   const lastIorb = getLastNonNull(plumbingRows, "iorb");
 
-  const sofrValue = lastSofr ? lastSofr.sofr : null;
-  const effrValue = lastEffr ? lastEffr.effr : null;
-  const iorbValue = lastIorb ? lastIorb.iorb : null;
-  const spreadValue =
-    sofrValue != null && iorbValue != null ? (sofrValue - iorbValue) * 100 : null;
+  const vSofr = lastSofr ? lastSofr.sofr : null;
+  const vEffr = lastEffr ? lastEffr.effr : null;
+  const vIorb = lastIorb ? lastIorb.iorb : null;
+  const spread = vSofr != null && vIorb != null ? (vSofr - vIorb) * 100 : null;
 
-  document.getElementById("card-sofr").textContent = formatPercent(sofrValue);
-  document.getElementById("card-effr").textContent = formatPercent(effrValue);
-  document.getElementById("card-iorb").textContent = formatPercent(iorbValue);
-  document.getElementById("card-spread").textContent = formatSpreadPp(spreadValue);
+  document.getElementById("card-sofr").textContent = formatPercent(vSofr);
+  document.getElementById("card-effr").textContent = formatPercent(vEffr);
+  document.getElementById("card-iorb").textContent = formatPercent(vIorb);
+  document.getElementById("card-spread").textContent = formatSpreadPp(spread);
 }
 
 function updateLastUpdateLabel() {
-  let lastDate = null;
-  if (plumbingRows.length) lastDate = plumbingRows[plumbingRows.length - 1].date;
-  if (!lastDate) return;
+  if (!plumbingRows.length) return;
+  const lastDate = plumbingRows[plumbingRows.length - 1].date;
 
   const utc = new Date(
     Date.UTC(
@@ -145,14 +134,13 @@ function updateLastUpdateLabel() {
     "Última actualización (UTC): " + label;
 }
 
-/* ---------- Tabs / Paneles ---------- */
+/* ---------- Tabs ---------- */
 
 function setupTabs() {
-  const buttons = document.querySelectorAll(".tab-button");
-  buttons.forEach((btn) => {
+  document.querySelectorAll(".tab-button").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const target = btn.dataset.panel;
-      if (!target || target === activePanel) return;
+      const panel = btn.dataset.panel;
+      if (!panel || panel === activePanel) return;
 
       document
         .querySelectorAll(".tab-button")
@@ -160,16 +148,15 @@ function setupTabs() {
       btn.classList.add("active");
 
       document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
-      document.getElementById(target).classList.add("active");
+      document.getElementById(panel).classList.add("active");
 
-      activePanel = target;
-      // reajustamos tamaño del gráfico al cambiar de panel
-      Object.values(charts).forEach((ch) => ch && ch.resize());
+      activePanel = panel;
+      buildChartForPanel(panel);
     });
   });
 }
 
-/* ---------- Botones de rango ---------- */
+/* ---------- Rangos ---------- */
 
 function setupRangeButtons() {
   document.querySelectorAll(".range-buttons").forEach((group) => {
@@ -185,83 +172,100 @@ function setupRangeButtons() {
         );
         btn.classList.add("active");
 
-        updateChartForPanel(panel);
+        if (panel === activePanel) buildChartForPanel(panel);
       });
     });
   });
 }
 
-/* ---------- Time range helper ---------- */
-
 function filterByRange(rows, range) {
   if (!rows.length || range === "ALL") return rows;
 
   const lastDate = rows[rows.length - 1].date;
-  let fromDate;
+  let from = new Date(lastDate);
 
   switch (range) {
     case "6M":
-      fromDate = new Date(lastDate);
-      fromDate.setMonth(fromDate.getMonth() - 6);
+      from.setMonth(from.getMonth() - 6);
       break;
     case "1Y":
-      fromDate = new Date(lastDate);
-      fromDate.setFullYear(fromDate.getFullYear() - 1);
+      from.setFullYear(from.getFullYear() - 1);
       break;
     case "3Y":
-      fromDate = new Date(lastDate);
-      fromDate.setFullYear(fromDate.getFullYear() - 3);
+      from.setFullYear(from.getFullYear() - 3);
       break;
     case "5Y":
-      fromDate = new Date(lastDate);
-      fromDate.setFullYear(fromDate.getFullYear() - 5);
+      from.setFullYear(from.getFullYear() - 5);
       break;
     default:
       return rows;
   }
-
-  return rows.filter((r) => r.date >= fromDate);
+  return rows.filter((r) => r.date >= from);
 }
 
-/* ---------- Construcción de todos los gráficos ---------- */
+/* ---------- Construcción de gráficos ---------- */
 
-function buildAllCharts() {
-  buildSofrChart();
-  buildSpreadChart();
-  buildTgaChart();
-  buildWalclChart();
-  buildRepoChart();
+function buildChartForPanel(panelId) {
+  // destruimos si ya existe
+  if (charts[panelId]) {
+    charts[panelId].destroy();
+    charts[panelId] = null;
+  }
+
+  switch (panelId) {
+    case "panel-sofr":
+      charts[panelId] = buildSofrChart();
+      break;
+    case "panel-spread":
+      charts[panelId] = buildSpreadChart();
+      break;
+    case "panel-tga":
+      charts[panelId] = buildTgaChart();
+      break;
+    case "panel-walcl":
+      charts[panelId] = buildWalclChart();
+      break;
+    case "panel-repo":
+      charts[panelId] = buildRepoChart();
+      break;
+  }
 }
 
-/* ---------- 1) SOFR / EFFR / IORB ---------- */
+/* ---- 1) SOFR / EFFR / IORB ---- */
 
 function buildSofrChart() {
   const range = panelRanges["panel-sofr"];
   const data = filterByRange(plumbingRows, range);
 
-  const sofrSeries = data
-    .filter((r) => r.sofr != null)
-    .map((r) => ({ x: r.date, y: r.sofr * 100 }));
-  const effrSeries = data
-    .filter((r) => r.effr != null)
-    .map((r) => ({ x: r.date, y: r.effr * 100 }));
-  const iorbSeries = data
-    .filter((r) => r.iorb != null)
-    .map((r) => ({ x: r.date, y: r.iorb * 100 }));
+  const series = [
+    {
+      name: "SOFR",
+      data: data
+        .filter((r) => r.sofr != null)
+        .map((r) => ({ x: r.date, y: r.sofr * 100 })),
+    },
+    {
+      name: "EFFR",
+      data: data
+        .filter((r) => r.effr != null)
+        .map((r) => ({ x: r.date, y: r.effr * 100 })),
+    },
+    {
+      name: "IORB",
+      data: data
+        .filter((r) => r.iorb != null)
+        .map((r) => ({ x: r.date, y: r.iorb * 100 })),
+    },
+  ];
 
-  const mainOptions = {
+  const options = {
     chart: {
-      id: "sofr-main",
       type: "line",
-      height: 420,
+      height: 460,
       toolbar: { show: true },
       zoom: { enabled: true },
     },
-    series: [
-      { name: "SOFR", data: sofrSeries },
-      { name: "EFFR", data: effrSeries },
-      { name: "IORB", data: iorbSeries },
-    ],
+    series,
     xaxis: { type: "datetime" },
     yaxis: {
       title: { text: "Tasa (%)" },
@@ -271,159 +275,73 @@ function buildSofrChart() {
     legend: { position: "top" },
   };
 
-  const allData = plumbingRows;
-  const brushSeries = [
-    {
-      name: "SOFR",
-      data: allData
-        .filter((r) => r.sofr != null)
-        .map((r) => ({ x: r.date, y: r.sofr * 100 })),
-    },
-  ];
-
-  const brushOptions = {
-    chart: {
-      id: "sofr-brush",
-      type: "area",
-      height: 120,
-      brush: { enabled: true, target: "sofr-main" },
-      selection: {
-        enabled: true,
-        xaxis: {
-          min: data.length ? data[0].date.getTime() : undefined,
-          max: data.length ? data[data.length - 1].date.getTime() : undefined,
-        },
-      },
-    },
-    series: brushSeries,
-    xaxis: { type: "datetime" },
-    yaxis: { labels: { show: false } },
-    dataLabels: { enabled: false },
-    stroke: { width: 1 },
-  };
-
-  if (charts.sofrMain) charts.sofrMain.destroy();
-  if (charts.sofrBrush) charts.sofrBrush.destroy();
-
-  charts.sofrMain = new ApexCharts(
-    document.getElementById("chart-sofr-main"),
-    mainOptions
-  );
-  charts.sofrBrush = new ApexCharts(
-    document.getElementById("chart-sofr-brush"),
-    brushOptions
-  );
-
-  charts.sofrMain.render();
-  charts.sofrBrush.render();
+  const el = document.getElementById("chart-sofr");
+  const chart = new ApexCharts(el, options);
+  chart.render();
+  return chart;
 }
 
-/* ---------- 2) Spread SOFR - IORB ---------- */
+/* ---- 2) Spread SOFR - IORB ---- */
 
 function buildSpreadChart() {
   const range = panelRanges["panel-spread"];
-
   const withSpread = plumbingRows
     .filter((r) => r.sofr != null && r.iorb != null)
     .map((r) => ({
       date: r.date,
-      spread: (r.sofr - r.iorb) * 100, // pp
+      spread: (r.sofr - r.iorb) * 100, // puntos básicos
     }));
 
   const data = filterByRange(withSpread, range);
 
-  const seriesMain = [
-    {
-      name: "SOFR - IORB",
-      data: data.map((r) => ({ x: r.date, y: r.spread })),
-    },
-  ];
-
-  const mainOptions = {
+  const options = {
     chart: {
-      id: "spread-main",
       type: "line",
-      height: 420,
+      height: 460,
       toolbar: { show: true },
       zoom: { enabled: true },
     },
-    series: seriesMain,
+    series: [
+      {
+        name: "SOFR - IORB",
+        data: data.map((r) => ({ x: r.date, y: r.spread })),
+      },
+    ],
     xaxis: { type: "datetime" },
     yaxis: {
       title: { text: "Spread (pp)" },
       labels: { formatter: (v) => v.toFixed(2) },
     },
-    stroke: { width: 2, curve: "straight" },
+    stroke: { width: 2 },
   };
 
-  const brushSeries = [
-    {
-      name: "SOFR - IORB",
-      data: withSpread.map((r) => ({ x: r.date, y: r.spread })),
-    },
-  ];
-
-  const brushOptions = {
-    chart: {
-      id: "spread-brush",
-      type: "area",
-      height: 120,
-      brush: { enabled: true, target: "spread-main" },
-      selection: {
-        enabled: true,
-        xaxis: {
-          min: data.length ? data[0].date.getTime() : undefined,
-          max: data.length ? data[data.length - 1].date.getTime() : undefined,
-        },
-      },
-    },
-    series: brushSeries,
-    xaxis: { type: "datetime" },
-    yaxis: { labels: { show: false } },
-    dataLabels: { enabled: false },
-    stroke: { width: 1 },
-  };
-
-  if (charts.spreadMain) charts.spreadMain.destroy();
-  if (charts.spreadBrush) charts.spreadBrush.destroy();
-
-  charts.spreadMain = new ApexCharts(
-    document.getElementById("chart-spread-main"),
-    mainOptions
-  );
-  charts.spreadBrush = new ApexCharts(
-    document.getElementById("chart-spread-brush"),
-    brushOptions
-  );
-
-  charts.spreadMain.render();
-  charts.spreadBrush.render();
+  const el = document.getElementById("chart-spread");
+  const chart = new ApexCharts(el, options);
+  chart.render();
+  return chart;
 }
 
-/* ---------- 3) TGA ---------- */
+/* ---- 3) TGA ---- */
 
 function buildTgaChart() {
   const range = panelRanges["panel-tga"];
   const data = filterByRange(tgaRows, range);
 
-  const seriesMain = [
-    {
-      name: "TGA",
-      data: data
-        .filter((r) => r.tga != null)
-        .map((r) => ({ x: r.date, y: r.tga / 1e3 })), // en Bn
-    },
-  ];
-
-  const mainOptions = {
+  const options = {
     chart: {
-      id: "tga-main",
       type: "area",
-      height: 420,
+      height: 460,
       toolbar: { show: true },
       zoom: { enabled: true },
     },
-    series: seriesMain,
+    series: [
+      {
+        name: "TGA",
+        data: data
+          .filter((r) => r.tga != null)
+          .map((r) => ({ x: r.date, y: r.tga / 1e3 })), // Bn
+      },
+    ],
     xaxis: { type: "datetime" },
     yaxis: {
       title: { text: "TGA (USD Bn)" },
@@ -434,158 +352,81 @@ function buildTgaChart() {
     fill: { opacity: 0.3 },
   };
 
-  const brushSeries = [
-    {
-      name: "TGA",
-      data: tgaRows
-        .filter((r) => r.tga != null)
-        .map((r) => ({ x: r.date, y: r.tga / 1e3 })),
-    },
-  ];
-
-  const brushOptions = {
-    chart: {
-      id: "tga-brush",
-      type: "area",
-      height: 120,
-      brush: { enabled: true, target: "tga-main" },
-      selection: {
-        enabled: true,
-        xaxis: {
-          min: data.length ? data[0].date.getTime() : undefined,
-          max: data.length ? data[data.length - 1].date.getTime() : undefined,
-        },
-      },
-    },
-    series: brushSeries,
-    xaxis: { type: "datetime" },
-    yaxis: { labels: { show: false } },
-    dataLabels: { enabled: false },
-  };
-
-  if (charts.tgaMain) charts.tgaMain.destroy();
-  if (charts.tgaBrush) charts.tgaBrush.destroy();
-
-  charts.tgaMain = new ApexCharts(
-    document.getElementById("chart-tga-main"),
-    mainOptions
-  );
-  charts.tgaBrush = new ApexCharts(
-    document.getElementById("chart-tga-brush"),
-    brushOptions
-  );
-
-  charts.tgaMain.render();
-  charts.tgaBrush.render();
+  const el = document.getElementById("chart-tga");
+  const chart = new ApexCharts(el, options);
+  chart.render();
+  return chart;
 }
 
-/* ---------- 4) WALCL ---------- */
+/* ---- 4) WALCL ---- */
 
 function buildWalclChart() {
   const range = panelRanges["panel-walcl"];
   const data = filterByRange(plumbingRows, range);
 
-  const seriesMain = [
-    {
-      name: "WALCL",
-      data: data
-        .filter((r) => r.walcl != null)
-        .map((r) => ({ x: r.date, y: r.walcl / 1e3 })), // Bn
-    },
-  ];
-
-  const mainOptions = {
+  const options = {
     chart: {
-      id: "walcl-main",
       type: "area",
-      height: 420,
+      height: 460,
       toolbar: { show: true },
       zoom: { enabled: true },
     },
-    series: seriesMain,
+    series: [
+      {
+        name: "WALCL",
+        data: data
+          .filter((r) => r.walcl != null)
+          .map((r) => ({ x: r.date, y: r.walcl / 1e3 })), // Bn
+      },
+    ],
     xaxis: { type: "datetime" },
     yaxis: {
       title: { text: "Balance Fed (USD Bn)" },
       labels: { formatter: (v) => v.toFixed(0) },
     },
+    dataLabels: { enabled: false },
     stroke: { curve: "straight", width: 2 },
     fill: { opacity: 0.4 },
-    dataLabels: { enabled: false },
   };
 
-  const brushSeries = [
-    {
-      name: "WALCL",
-      data: plumbingRows
-        .filter((r) => r.walcl != null)
-        .map((r) => ({ x: r.date, y: r.walcl / 1e3 })),
-    },
-  ];
-
-  const brushOptions = {
-    chart: {
-      id: "walcl-brush",
-      type: "area",
-      height: 120,
-      brush: { enabled: true, target: "walcl-main" },
-      selection: {
-        enabled: true,
-        xaxis: {
-          min: data.length ? data[0].date.getTime() : undefined,
-          max: data.length ? data[data.length - 1].date.getTime() : undefined,
-        },
-      },
-    },
-    series: brushSeries,
-    xaxis: { type: "datetime" },
-    yaxis: { labels: { show: false } },
-    dataLabels: { enabled: false },
-  };
-
-  if (charts.walclMain) charts.walclMain.destroy();
-  if (charts.walclBrush) charts.walclBrush.destroy();
-
-  charts.walclMain = new ApexCharts(
-    document.getElementById("chart-walcl-main"),
-    mainOptions
-  );
-  charts.walclBrush = new ApexCharts(
-    document.getElementById("chart-walcl-brush"),
-    brushOptions
-  );
-
-  charts.walclMain.render();
-  charts.walclBrush.render();
+  const el = document.getElementById("chart-walcl");
+  const chart = new ApexCharts(el, options);
+  chart.render();
+  return chart;
 }
 
-/* ---------- 5) Repo & RRP ---------- */
+/* ---- 5) Repo & RRP ---- */
 
 function buildRepoChart() {
   const range = panelRanges["panel-repo"];
-  const data = filterByRange(repoRows, range);
+  const data = filterByRange(plumbingRows, range);
 
-  const tgcrSeries = data
-    .filter((r) => r.tgcr != null)
-    .map((r) => ({ x: r.date, y: r.tgcr * 100 }));
-  const sofrSeries = data
-    .filter((r) => r.sofr != null)
-    .map((r) => ({ x: r.date, y: r.sofr * 100 }));
-  const onrrpSeries = data
-    .filter((r) => r.onrrp != null)
-    .map((r) => ({ x: r.date, y: r.onrrp * 100 }));
-
-  const mainOptions = {
+  const options = {
     chart: {
-      id: "repo-main",
       type: "line",
-      height: 420,
+      height: 460,
       toolbar: { show: true },
       zoom: { enabled: true },
     },
     series: [
-      { name: "TGCR", data: tgcrSeries },
-      { name: "SOFR", data: sofrSeries },
-      { name: "ON RRP", data: onrrpSeries },
+      {
+        name: "TGCR",
+        data: data
+          .filter((r) => r.tgcr != null)
+          .map((r) => ({ x: r.date, y: r.tgcr * 100 })),
+      },
+      {
+        name: "SOFR",
+        data: data
+          .filter((r) => r.sofr != null)
+          .map((r) => ({ x: r.date, y: r.sofr * 100 })),
+      },
+      {
+        name: "ON RRP",
+        data: data
+          .filter((r) => r.onrrp != null)
+          .map((r) => ({ x: r.date, y: r.onrrp * 100 })),
+      },
     ],
     xaxis: { type: "datetime" },
     yaxis: {
@@ -596,70 +437,8 @@ function buildRepoChart() {
     legend: { position: "top" },
   };
 
-  const brushSeries = [
-    {
-      name: "TGCR",
-      data: repoRows
-        .filter((r) => r.tgcr != null)
-        .map((r) => ({ x: r.date, y: r.tgcr * 100 })),
-    },
-  ];
-
-  const brushOptions = {
-    chart: {
-      id: "repo-brush",
-      type: "area",
-      height: 120,
-      brush: { enabled: true, target: "repo-main" },
-      selection: {
-        enabled: true,
-        xaxis: {
-          min: data.length ? data[0].date.getTime() : undefined,
-          max: data.length ? data[data.length - 1].date.getTime() : undefined,
-        },
-      },
-    },
-    series: brushSeries,
-    xaxis: { type: "datetime" },
-    yaxis: { labels: { show: false } },
-    dataLabels: { enabled: false },
-    stroke: { width: 1 },
-  };
-
-  if (charts.repoMain) charts.repoMain.destroy();
-  if (charts.repoBrush) charts.repoBrush.destroy();
-
-  charts.repoMain = new ApexCharts(
-    document.getElementById("chart-repo-main"),
-    mainOptions
-  );
-  charts.repoBrush = new ApexCharts(
-    document.getElementById("chart-repo-brush"),
-    brushOptions
-  );
-
-  charts.repoMain.render();
-  charts.repoBrush.render();
-}
-
-/* ---------- Actualizar un panel cuando cambiás rango ---------- */
-
-function updateChartForPanel(panelId) {
-  switch (panelId) {
-    case "panel-sofr":
-      buildSofrChart();
-      break;
-    case "panel-spread":
-      buildSpreadChart();
-      break;
-    case "panel-tga":
-      buildTgaChart();
-      break;
-    case "panel-walcl":
-      buildWalclChart();
-      break;
-    case "panel-repo":
-      buildRepoChart();
-      break;
-  }
+  const el = document.getElementById("chart-repo");
+  const chart = new ApexCharts(el, options);
+  chart.render();
+  return chart;
 }
