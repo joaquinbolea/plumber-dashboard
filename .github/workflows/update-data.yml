@@ -2,13 +2,12 @@ name: Update plumbing data
 
 on:
   schedule:
-    - cron: "0 * * * *"   # corre cada hora en punto
-  workflow_dispatch:       # para correrlo manualmente
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -34,12 +33,6 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           python scripts/fetch_tga.py
-
-      - name: Run fetch_repo.py
-        env:
-          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-        run: |
-          python scripts/fetch_repo.py
 
       - name: Commit and push updated data
         uses: stefanzweifel/git-auto-commit-action@v5
