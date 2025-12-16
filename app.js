@@ -6,6 +6,38 @@ let tgaRows = [];
 const charts = {};          // charts[panelId]
 let activePanel = "panel-sofr";
 
+function normalizePlumbing(plumbJson) {
+  if (!plumbJson || !plumbJson.series || !plumbJson.series.SOFR) {
+    throw new Error("Formato inesperado de plumbing_data.json");
+  }
+
+  const s = plumbJson.series;
+
+  const dates = s.SOFR.dates;
+  const sofrVals = s.SOFR.values;
+  const effrVals = s.EFFR?.values ?? [];
+  const iorbVals = s.IORB?.values ?? [];
+  const walclVals = s.WALCL?.values ?? [];
+  const tgcrVals  = s.TGCR?.values ?? [];
+  const onrrpVals = s.ONRRP?.values ?? [];
+
+  const rows = [];
+
+  for (let i = 0; i < dates.length; i++) {
+    rows.push({
+      date: new Date(dates[i]),
+      sofr: toNumber(sofrVals[i]),
+      effr: toNumber(effrVals[i]),
+      iorb: toNumber(iorbVals[i]),
+      walcl: toNumber(walclVals[i]),
+      tgcr: toNumber(tgcrVals[i]),
+      onrrp: toNumber(onrrpVals[i]),
+    });
+  }
+
+  return rows.filter(r => r.date instanceof Date && !isNaN(r.date));
+}
+
 const panelRanges = {
   "panel-sofr": "6M",
   "panel-spread": "6M",
