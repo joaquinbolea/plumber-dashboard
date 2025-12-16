@@ -1,141 +1,136 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Plumber Dashboard – Liquidez & Funding USD</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plumbers Dashboard</title>
+  <link rel="stylesheet" href="./styles.css" />
 
   <!-- ApexCharts -->
-  <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.1"></script>
-
-  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
-  <header class="top-bar">
-    <h1>Plumber Dashboard – Liquidez &amp; Funding USD</h1>
-    <div class="last-update" id="last-update">Última actualización: …</div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-title">PLUMBERS</div>
+      <div class="brand-sub">Funding & Liquidity Monitoring</div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">SOFR</div>
+        <div class="card-value" id="card-sofr">–</div>
+      </div>
+      <div class="card">
+        <div class="card-label">EFFR</div>
+        <div class="card-value" id="card-effr">–</div>
+      </div>
+      <div class="card">
+        <div class="card-label">IORB</div>
+        <div class="card-value" id="card-iorb">–</div>
+      </div>
+      <div class="card">
+        <div class="card-label">SOFR - IORB</div>
+        <div class="card-value" id="card-spread">–</div>
+      </div>
+    </div>
   </header>
 
-  <!-- Cards -->
-  <section class="cards-row">
-    <div class="metric-card">
-      <div class="metric-label">SOFR</div>
-      <div class="metric-value" id="card-sofr">–</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">EFFR</div>
-      <div class="metric-value" id="card-effr">–</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">IORB</div>
-      <div class="metric-value" id="card-iorb">–</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">SOFR – IORB</div>
-      <div class="metric-value" id="card-spread">–</div>
-    </div>
-  </section>
-
-  <!-- Tabs -->
   <nav class="tabs">
-    <button class="tab-button active" data-panel="panel-sofr">
-      SOFR vs EFFR vs IORB
-    </button>
-    <button class="tab-button" data-panel="panel-spread">
-      Spread SOFR – IORB
-    </button>
-    <button class="tab-button" data-panel="panel-tga">
-      Cuenta del Tesoro (TGA)
-    </button>
-    <button class="tab-button" data-panel="panel-walcl">
-      Balance de la Fed (WALCL)
-    </button>
-    <button class="tab-button" data-panel="panel-repo">
-      Mercado de Repo &amp; RRP
-    </button>
+    <button class="tab-button active" data-panel="panel-sofr">SOFR / EFFR / IORB</button>
+    <button class="tab-button" data-panel="panel-spread">Spread SOFR - IORB</button>
+    <button class="tab-button" data-panel="panel-tga">TGA</button>
+    <button class="tab-button" data-panel="panel-walcl">Fed Balance Sheet</button>
+    <button class="tab-button" data-panel="panel-repo">Repo / RRP</button>
   </nav>
 
-  <!-- PANELS -->
-
-  <!-- 1) SOFR / EFFR / IORB -->
-  <section id="panel-sofr" class="panel active">
-    <header class="panel-header">
-      <h2>SOFR vs EFFR vs IORB</h2>
-      <div class="range-buttons" data-panel="panel-sofr">
-        <button class="range-btn active" data-range="6M">6M</button>
-        <button class="range-btn" data-range="1Y">1A</button>
-        <button class="range-btn" data-range="3Y">3A</button>
-        <button class="range-btn" data-range="ALL">Todos</button>
+  <main class="main">
+    <!-- Panel 1 -->
+    <section class="panel active" id="panel-sofr">
+      <div class="panel-head">
+        <h2>SOFR vs EFFR vs IORB</h2>
+        <div class="range-buttons" data-panel="panel-sofr">
+          <button class="range-btn active" data-range="6M">6M</button>
+          <button class="range-btn" data-range="1Y">1Y</button>
+          <button class="range-btn" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="ALL">ALL</button>
+        </div>
       </div>
-    </header>
-    <div class="chart-wrapper">
-      <div id="chart-sofr" class="chart-main"></div>
-    </div>
-  </section>
-
-  <!-- 2) Spread SOFR - IORB -->
-  <section id="panel-spread" class="panel">
-    <header class="panel-header">
-      <h2>Spread SOFR – IORB</h2>
-      <div class="range-buttons" data-panel="panel-spread">
-        <button class="range-btn active" data-range="6M">6M</button>
-        <button class="range-btn" data-range="1Y">1A</button>
-        <button class="range-btn" data-range="3Y">3A</button>
-        <button class="range-btn" data-range="ALL">Todos</button>
+      <div class="chart-wrap">
+        <div id="chart-sofr"></div>
       </div>
-    </header>
-    <div class="chart-wrapper">
-      <div id="chart-spread" class="chart-main"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- 3) TGA -->
-  <section id="panel-tga" class="panel">
-    <header class="panel-header">
-      <h2>Cuenta del Tesoro en la Fed (TGA)</h2>
-      <div class="range-buttons" data-panel="panel-tga">
-        <button class="range-btn active" data-range="6M">6M</button>
-        <button class="range-btn" data-range="1Y">1A</button>
-        <button class="range-btn" data-range="3Y">3A</button>
-        <button class="range-btn" data-range="ALL">Todos</button>
+    <!-- Panel 2 -->
+    <section class="panel" id="panel-spread">
+      <div class="panel-head">
+        <h2>Spread SOFR - IORB</h2>
+        <div class="range-buttons" data-panel="panel-spread">
+          <button class="range-btn active" data-range="6M">6M</button>
+          <button class="range-btn" data-range="1Y">1Y</button>
+          <button class="range-btn" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="ALL">ALL</button>
+        </div>
       </div>
-    </header>
-    <div class="chart-wrapper">
-      <div id="chart-tga" class="chart-main"></div>
-    </div>
-  </section>
-
-  <!-- 4) WALCL -->
-  <section id="panel-walcl" class="panel">
-    <header class="panel-header">
-      <h2>Balance de la Fed (WALCL)</h2>
-      <div class="range-buttons" data-panel="panel-walcl">
-        <button class="range-btn active" data-range="3Y">3A</button>
-        <button class="range-btn" data-range="5Y">5A</button>
-        <button class="range-btn" data-range="ALL">Todos</button>
+      <div class="chart-wrap">
+        <div id="chart-spread"></div>
       </div>
-    </header>
-    <div class="chart-wrapper">
-      <div id="chart-walcl" class="chart-main"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- 5) Repo & RRP -->
-  <section id="panel-repo" class="panel">
-    <header class="panel-header">
-      <h2>Mercado de Repo y RRP (TGCR, SOFR, ON RRP)</h2>
-      <div class="range-buttons" data-panel="panel-repo">
-        <button class="range-btn active" data-range="6M">6M</button>
-        <button class="range-btn" data-range="1Y">1A</button>
-        <button class="range-btn" data-range="3Y">3A</button>
-        <button class="range-btn" data-range="ALL">Todos</button>
+    <!-- Panel 3 -->
+    <section class="panel" id="panel-tga">
+      <div class="panel-head">
+        <h2>Treasury General Account (TGA)</h2>
+        <div class="range-buttons" data-panel="panel-tga">
+          <button class="range-btn active" data-range="6M">6M</button>
+          <button class="range-btn" data-range="1Y">1Y</button>
+          <button class="range-btn" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="ALL">ALL</button>
+        </div>
       </div>
-    </header>
-    <div class="chart-wrapper">
-      <div id="chart-repo" class="chart-main"></div>
-    </div>
-  </section>
+      <div class="chart-wrap">
+        <div id="chart-tga"></div>
+      </div>
+    </section>
 
-  <script src="app.js"></script>
+    <!-- Panel 4 -->
+    <section class="panel" id="panel-walcl">
+      <div class="panel-head">
+        <h2>Fed Balance Sheet (WALCL)</h2>
+        <div class="range-buttons" data-panel="panel-walcl">
+          <button class="range-btn active" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="ALL">ALL</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <div id="chart-walcl"></div>
+      </div>
+    </section>
+
+    <!-- Panel 5 -->
+    <section class="panel" id="panel-repo">
+      <div class="panel-head">
+        <h2>Repo / RRP</h2>
+        <div class="range-buttons" data-panel="panel-repo">
+          <button class="range-btn active" data-range="6M">6M</button>
+          <button class="range-btn" data-range="1Y">1Y</button>
+          <button class="range-btn" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="ALL">ALL</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <div id="chart-repo"></div>
+      </div>
+    </section>
+
+    <div class="footer" id="last-update">Última actualización (UTC): –</div>
+  </main>
+
+  <script src="./app.js"></script>
 </body>
 </html>
